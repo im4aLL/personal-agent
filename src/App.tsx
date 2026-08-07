@@ -1,12 +1,17 @@
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { HashRouter, Route, Routes } from "react-router-dom";
+import { Layout } from "#components/layout";
+import ChatPage from "#pages/chat";
+import SettingsPage from "#pages/settings";
 
-function App() {
+export default function App() {
   return (
-    <main className="container">
-      Personal Agent
-    </main>
+    <HashRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/" element={<ChatPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+        </Route>
+      </Routes>
+    </HashRouter>
   );
 }
-
-export default App;

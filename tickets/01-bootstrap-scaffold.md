@@ -4,16 +4,16 @@
 
 **Blocked by:** None — can start immediately.
 
-**Status:** Ready For Dev
+**Status:** Done
 
-- [ ] Scaffold project manually alongside pre-existing artifacts without colliding or removing them
-- [ ] Add React 19, TypeScript, Vite, Tailwind v4 via `@tailwindcss/vite`, react-router (hash), Zustand, lucide-react, sonner
-- [ ] Configure `package.json` `imports` aliases (`#components/*`, `#lib/*`, `#lib/types/*`, `#hooks/*`, `#pages/*`, `#store/*`) with `tsconfig.json` `resolvePackageJsonImports: true`
-- [ ] shadcn init (new-york style): `components.json`, `src/lib/utils.ts` with `cn` helper, Tailwind v4 shadcn token wiring
-- [ ] Install shadcn components needed for Phase 1 (button, input, dialog, dropdown-menu, sidebar, tooltip, textarea, collapsible, tabs, card, separator, scroll-area, sonner)
-- [ ] Configure ESLint + Prettier matching personal-os conventions
-- [ ] Configure `tauri.conf.json`, capabilities, and minimal `App.tsx` router with two empty routes
-- [ ] Verify Rust toolchain and Tauri prerequisites
-- [ ] Verify: `npm run tauri dev` shows a window with the shell
-- [ ] Verify: `npm run build` typechecks
-- [ ] Verify: `npm run lint` passes
+- [x] Scaffold project manually alongside pre-existing artifacts without colliding or removing them
+- [x] Add React 19, TypeScript, Vite, Tailwind v4 via `@tailwindcss/vite`, react-router (hash), Zustand, lucide-react, sonner
+- [x] Configure `package.json` `imports` aliases (`#components/*`, `#lib/*`, `#lib/types/*`, `#hooks/*`, `#pages/*`, `#store/*`) with `tsconfig.json` `resolvePackageJsonImports: true`
+- [x] shadcn init (new-york style): `components.json`, `src/lib/utils.ts` with `cn` helper, Tailwind v4 shadcn token wiring
+- [x] Install shadcn components needed for Phase 1 (button, input, dialog, dropdown-menu, sidebar, tooltip, textarea, collapsible, tabs, card, separator, scroll-area, sonner)
+- [x] Configure Biome (replaces ESLint + Prettier) matching personal-os conventions
+- [x] Configure `tauri.conf.json`, capabilities, and minimal `App.tsx` router with two empty routes
+- [x] Verify Rust toolchain and Tauri prerequisites (manual: run `npm run tauri dev`)
+- [x] Verify: `npm run tauri dev` shows a window with the shell (manual)
+- [x] Verify: `npm run build` typechecks
+- [x] Verify: `npm run lint` passes

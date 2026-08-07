@@ -10,7 +10,16 @@
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
+    "resolvePackageJsonImports": true,
     "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "#components/*": ["./src/components/*"],
+      "#lib/*": ["./src/lib/*"],
+      "#hooks/*": ["./src/hooks/*"],
+      "#pages/*": ["./src/pages/*"],
+      "#store/*": ["./src/store/*"]
+    },
     "noEmit": true,
     "jsx": "react-jsx",
 
