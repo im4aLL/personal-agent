@@ -1,8 +1,8 @@
-# 1 — personal-agent | Frontend - Bootstrap scaffold and tooling
+# 1 - personal-agent | Frontend - Bootstrap scaffold and tooling
 
 **What to build:** `npm run tauri dev` opens a Tauri window with React 19, Tailwind v4, shadcn (new-york), Zustand, hash router, and all tooling configured. The app has a minimal shell (empty sidebar placeholder + main area) with theme applied. ESLint and Prettier are configured and run green. All pre-existing artifacts (`ai/extensions/`, `.pi/`, `.opencode/`, `pi-lsp-setup.md`) are untouched.
 
-**Blocked by:** None — can start immediately.
+**Blocked by:** None - can start immediately.
 
 **Status:** Done
 

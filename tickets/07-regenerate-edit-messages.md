@@ -1,8 +1,8 @@
-# 7 — personal-agent | Frontend - Regenerate and edit messages
+# 7 - personal-agent | Frontend - Regenerate and edit messages
 
 **What to build:** Regenerate replaces the last assistant message with a fresh streamed response. Editing a user message opens an inline textarea; on save, the text is replaced, downstream messages are truncated, an "edited" marker appears, and the assistant re-streams from that point. Message action buttons (previously toasts) are wired to these real handlers. Unit tests pass for regenerate truncation logic, editMessage descendant removal, and editedAt marker.
 
-**Blocked by:** #6 — First real chat flow with send, stream, and stop
+**Blocked by:** #6 - First real chat flow with send, stream, and stop
 
 **Status:** Ready For Dev
 

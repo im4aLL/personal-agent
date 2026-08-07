@@ -1,8 +1,8 @@
-# 3 — personal-agent | Frontend - Chat area with message rendering
+# 3 - personal-agent | Frontend - Chat area with message rendering
 
 **What to build:** Selecting a mock conversation shows its messages in the chat area. Message bubbles render with role styling, markdown with syntax-highlighted code blocks, and copy-code buttons. Collapsible thinking blocks expand/collapse. Per-message action buttons (edit, copy, regenerate) are visible and show "Coming soon" toasts. Model selector dropdown shows mock providers and models. All visual interactions (collapse/expand, copy, dropdown selection) are live.
 
-**Blocked by:** #2 — App shell, sidebar, and navigation
+**Blocked by:** #2 - App shell, sidebar, and navigation
 
 **Status:** Done
 

@@ -1,8 +1,8 @@
-# 4 — personal-agent | Frontend - Message input, empty states, and settings page
+# 4 - personal-agent | Frontend - Message input, empty states, and settings page
 
 **What to build:** Auto-grow textarea with send button (idle state) and stop button (mock generating state). Empty state screens: welcome screen with suggestion chips when no conversation is selected, and a no-provider state. Settings page with three tabs: Providers (list with cards, add/edit dialog with label/base URL/key fields and test-connection button), Appearance (theme selector), and Data (Turso URL/token fields). All settings actions show "Coming soon" toasts. In-memory filtering of mock conversations via the sidebar search works.
 
-**Blocked by:** #2 — App shell, sidebar, and navigation
+**Blocked by:** #2 - App shell, sidebar, and navigation
 
 **Status:** Done
 

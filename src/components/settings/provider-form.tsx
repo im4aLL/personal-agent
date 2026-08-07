@@ -13,66 +13,78 @@ import {
 } from "#components/ui/dialog";
 import { Input } from "#components/ui/input";
 import { Label } from "#components/ui/label";
+import type { ConnectionMode, ProviderInput, TestConnectionResult } from "#lib/providers";
+import { testProviderConnection } from "#lib/providers";
 import type { ProviderInfo } from "#store/chat";
 
-export type ProviderFormData = {
-  label: string;
-  baseUrl: string;
-  apiKey: string;
-};
+export type ProviderFormData = ProviderInput;
 
 interface ProviderFormProps {
   provider?: ProviderInfo | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSubmit: (data: ProviderFormData) => void;
+  existingProviders: ProviderInfo[];
 }
 
-function isValidUrl(value: string) {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
+type FormField = "label" | "baseUrl" | "apiKey";
 
 type FormState = {
   label: string;
   baseUrl: string;
   apiKey: string;
-  touched: { label: boolean; baseUrl: boolean; apiKey: boolean };
+  connectionMode: ConnectionMode;
+  touched: Record<FormField, boolean>;
 };
 
+function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function getInitialState(provider: ProviderInfo | null | undefined): FormState {
+  const isEditing = Boolean(provider);
+
   return {
     label: provider?.label ?? "",
     baseUrl: provider?.baseUrl ?? "",
     apiKey: provider?.apiKey ?? "",
-    touched: { label: false, baseUrl: false, apiKey: false },
+    connectionMode: provider?.connectionMode ?? "direct",
+    touched: { label: isEditing, baseUrl: isEditing, apiKey: isEditing },
   };
 }
 
-export function ProviderForm({ provider, open, onOpenChange, onSubmit }: ProviderFormProps) {
+export function ProviderForm({
+  provider,
+  open,
+  onOpenChange,
+  onSubmit,
+  existingProviders,
+}: ProviderFormProps) {
   const [form, setForm] = useState<FormState>(() => getInitialState(provider));
+  const [isTesting, setIsTesting] = useState(false);
 
   const isEditing = Boolean(provider);
-  const labelError = form.touched.label && !form.label.trim() ? "Label is required." : "";
-  const baseUrlError = form.touched.baseUrl
-    ? !form.baseUrl.trim()
-      ? "Base URL is required."
-      : !isValidUrl(form.baseUrl)
-        ? "Enter a valid URL."
-        : ""
-    : "";
+  const labelError = getLabelError(form, existingProviders, provider?.id);
+  const baseUrlError = getBaseUrlError(form);
   const apiKeyError = form.touched.apiKey && !form.apiKey ? "API key is required." : "";
   const isValid = Boolean(
-    form.label.trim() && form.baseUrl.trim() && isValidUrl(form.baseUrl) && form.apiKey,
+    form.label.trim() &&
+      !labelError &&
+      form.baseUrl.trim() &&
+      !baseUrlError &&
+      form.apiKey &&
+      !apiKeyError,
   );
 
   useEffect(() => {
     if (open) {
       setForm(getInitialState(provider));
+      setIsTesting(false);
     }
   }, [open, provider]);
 
@@ -80,28 +92,56 @@ export function ProviderForm({ provider, open, onOpenChange, onSubmit }: Provide
     setForm((prev) => ({ ...prev, [field]: value }));
   }
 
-  function markTouched(field: keyof FormState["touched"]) {
+  function markTouched(field: FormField) {
     setForm((prev) => ({ ...prev, touched: { ...prev.touched, [field]: true } }));
   }
 
-  function handleTestConnection() {
-    toast("Coming soon", {
-      description: "Test connection is not implemented yet.",
-    });
+  async function handleTestConnection() {
+    setForm((prev) => ({
+      ...prev,
+      touched: { label: true, baseUrl: true, apiKey: true },
+    }));
+
+    if (!isValid) {
+      return;
+    }
+
+    setIsTesting(true);
+
+    const result = await runTestConnection(form);
+
+    setIsTesting(false);
+
+    if (result.ok) {
+      toast.success("Connection successful", {
+        description: result.usedProxy ? "Reached via proxy fallback." : "Direct connection works.",
+      });
+    } else {
+      toast.error("Connection failed", {
+        description: result.error ?? "Could not reach provider.",
+      });
+    }
   }
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
-    setForm((prev) => ({ ...prev, touched: { label: true, baseUrl: true, apiKey: true } }));
 
-    if (!form.label.trim() || !form.baseUrl.trim() || !isValidUrl(form.baseUrl) || !form.apiKey) {
+    setForm((prev) => ({
+      ...prev,
+      touched: { label: true, baseUrl: true, apiKey: true },
+    }));
+
+    if (!isValid) {
       return;
     }
 
-    onSubmit({ label: form.label.trim(), baseUrl: form.baseUrl.trim(), apiKey: form.apiKey });
-    toast("Coming soon", {
-      description: `${isEditing ? "Update" : "Add"} provider is not implemented yet.`,
+    onSubmit({
+      label: form.label.trim(),
+      baseUrl: form.baseUrl.trim(),
+      apiKey: form.apiKey,
+      connectionMode: form.connectionMode,
     });
+
     onOpenChange(false);
   }
 
@@ -112,7 +152,7 @@ export function ProviderForm({ provider, open, onOpenChange, onSubmit }: Provide
           <DialogHeader>
             <DialogTitle>{isEditing ? "Edit provider" : "Add provider"}</DialogTitle>
             <DialogDescription>
-              Configure a provider endpoint and API key. Changes are not persisted yet.
+              Configure a provider endpoint and API key. Changes are persisted locally.
             </DialogDescription>
           </DialogHeader>
 
@@ -171,11 +211,32 @@ export function ProviderForm({ provider, open, onOpenChange, onSubmit }: Provide
                 </p>
               )}
             </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="provider-connection-mode">Connection mode</Label>
+              <select
+                id="provider-connection-mode"
+                value={form.connectionMode}
+                onChange={(event) => updateField("connectionMode", event.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <option value="direct">Direct (fetch from browser)</option>
+                <option value="proxy">Proxy (via Rust backend)</option>
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Auto-detected on model fetch if left as Direct.
+              </p>
+            </div>
           </div>
 
           <DialogFooter className="gap-2">
-            <Button type="button" variant="outline" onClick={handleTestConnection}>
-              Test connection
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleTestConnection}
+              disabled={isTesting || !isValid}
+            >
+              {isTesting ? "Testing..." : "Test connection"}
             </Button>
             <Button type="submit" disabled={!isValid}>
               {isEditing ? "Save changes" : "Add provider"}
@@ -185,4 +246,54 @@ export function ProviderForm({ provider, open, onOpenChange, onSubmit }: Provide
       </DialogContent>
     </Dialog>
   );
+}
+
+function getLabelError(
+  form: FormState,
+  existingProviders: ProviderInfo[],
+  excludeProviderId?: string,
+): string {
+  const trimmed = form.label.trim();
+
+  if (form.touched.label && !trimmed) {
+    return "Label is required.";
+  }
+
+  if (
+    trimmed &&
+    existingProviders.some(
+      (provider) =>
+        provider.label.trim().toLowerCase() === trimmed.toLowerCase() &&
+        provider.id !== excludeProviderId,
+    )
+  ) {
+    return "A provider with this label already exists.";
+  }
+
+  return "";
+}
+
+function getBaseUrlError(form: FormState): string {
+  if (!form.touched.baseUrl) {
+    return "";
+  }
+
+  if (!form.baseUrl.trim()) {
+    return "Base URL is required.";
+  }
+
+  if (!isValidHttpUrl(form.baseUrl)) {
+    return "Enter a valid http or https URL.";
+  }
+
+  return "";
+}
+
+async function runTestConnection(form: FormState): Promise<TestConnectionResult> {
+  return testProviderConnection({
+    id: "test",
+    baseUrl: form.baseUrl.trim(),
+    apiKey: form.apiKey,
+    connectionMode: form.connectionMode,
+  });
 }

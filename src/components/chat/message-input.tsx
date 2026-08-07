@@ -1,14 +1,26 @@
 "use client";
 
-import { ArrowUpIcon, BrainIcon, ChevronDownIcon, PaperclipIcon, SquareIcon } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  ArrowUpIcon,
+  BrainIcon,
+  ChevronDownIcon,
+  Loader2Icon,
+  PaperclipIcon,
+  RefreshCwIcon,
+  SquareIcon,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "#components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#components/ui/dropdown-menu";
 import { Textarea } from "#components/ui/textarea";
@@ -25,6 +37,8 @@ function ModelSelector() {
   const providers = useChatStore((state) => state.providers);
   const selectedModel = useChatStore((state) => state.selectedModel);
   const setSelectedModel = useChatStore((state) => state.setSelectedModel);
+  const refreshProviderModels = useChatStore((state) => state.refreshProviderModels);
+  const [isOpen, setIsOpen] = useState(false);
 
   const options = useMemo(
     () =>
@@ -34,7 +48,17 @@ function ModelSelector() {
           label: `${provider.label} / ${model.name}`,
           providerId: provider.id,
           modelId: model.id,
+          providerName: provider.label,
         })),
+      ),
+    [providers],
+  );
+
+  const providersNeedingRefresh = useMemo(
+    () =>
+      providers.filter(
+        (provider) =>
+          provider.models.length === 0 && !provider.isLoadingModels && !provider.modelsError,
       ),
     [providers],
   );
@@ -42,31 +66,85 @@ function ModelSelector() {
   const selectedValue = `${selectedModel.providerId}:${selectedModel.modelId}`;
   const selectedLabel =
     options.find((option) => option.value === selectedValue)?.label ?? "Select model";
+  const isLoading = providers.some((provider) => provider.isLoadingModels);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    for (const provider of providersNeedingRefresh) {
+      void refreshProviderModels(provider.id);
+    }
+  }, [isOpen, providersNeedingRefresh, refreshProviderModels]);
+
+  function handleRetry(providerId: string) {
+    void refreshProviderModels(providerId);
+  }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <Button type="button" variant="ghost" size="sm" className="h-9 gap-1 px-2 text-xs">
+          {isLoading ? <Loader2Icon className="size-3 animate-spin" /> : null}
           {selectedLabel}
           <ChevronDownIcon className="size-3 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-        <DropdownMenuRadioGroup
-          value={selectedValue}
-          onValueChange={(value) => {
-            const option = options.find((item) => item.value === value);
-            if (option) {
-              setSelectedModel(option.providerId, option.modelId);
-            }
-          }}
-        >
-          {options.map((option) => (
-            <DropdownMenuRadioItem key={option.value} value={option.value}>
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
+        {providers.length === 0 ? (
+          <DropdownMenuLabel>No providers configured</DropdownMenuLabel>
+        ) : (
+          providers.map((provider) => (
+            <DropdownMenuGroup key={provider.id}>
+              <DropdownMenuLabel>{provider.label}</DropdownMenuLabel>
+              {provider.isLoadingModels && provider.models.length === 0 && (
+                <DropdownMenuItem disabled>
+                  <Loader2Icon className="mr-2 size-4 animate-spin" />
+                  Loading models...
+                </DropdownMenuItem>
+              )}
+              {provider.modelsError && (
+                <DropdownMenuItem
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleRetry(provider.id);
+                  }}
+                >
+                  <RefreshCwIcon className="mr-2 size-4" />
+                  Error: {provider.modelsError}
+                </DropdownMenuItem>
+              )}
+              {provider.models.length > 0 && (
+                <DropdownMenuRadioGroup
+                  value={selectedValue}
+                  onValueChange={(value) => {
+                    const option = options.find((item) => item.value === value);
+                    if (option) {
+                      setSelectedModel(option.providerId, option.modelId);
+                    }
+                  }}
+                >
+                  {provider.models.map((model) => {
+                    const value = `${provider.id}:${model.id}`;
+                    return (
+                      <DropdownMenuRadioItem key={value} value={value}>
+                        {model.name}
+                      </DropdownMenuRadioItem>
+                    );
+                  })}
+                </DropdownMenuRadioGroup>
+              )}
+              {provider.models.length === 0 &&
+                !provider.isLoadingModels &&
+                !provider.modelsError && (
+                  <DropdownMenuItem disabled>No models found</DropdownMenuItem>
+                )}
+              <DropdownMenuSeparator />
+            </DropdownMenuGroup>
+          ))
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, SparklesIcon } from "lucide-react";
 import { useState } from "react";
 import { AppearanceTab } from "#components/settings/appearance-tab";
 import { DataTab } from "#components/settings/data-tab";
@@ -9,10 +9,17 @@ import { ProvidersList } from "#components/settings/providers-list";
 import { Button } from "#components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#components/ui/tabs";
-import { MOCK_PROVIDERS, type ProviderInfo } from "#store/chat";
+import type { ConnectionMode } from "#lib/providers";
+import { PROVIDER_PRESETS, type ProviderInfo, useChatStore } from "#store/chat";
 
 export default function SettingsPage() {
-  const [providers, setProviders] = useState<ProviderInfo[]>(MOCK_PROVIDERS);
+  const providers = useChatStore((state) => state.providers);
+  const addProvider = useChatStore((state) => state.addProvider);
+  const updateProvider = useChatStore((state) => state.updateProvider);
+  const deleteProvider = useChatStore((state) => state.deleteProvider);
+  const setDefaultProvider = useChatStore((state) => state.setDefaultProvider);
+  const refreshProviderModels = useChatStore((state) => state.refreshProviderModels);
+
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null);
 
@@ -27,30 +34,46 @@ export default function SettingsPage() {
   }
 
   function handleDelete(provider: ProviderInfo) {
-    setProviders((prev) => prev.filter((item) => item.id !== provider.id));
+    deleteProvider(provider.id);
   }
 
   function handleSubmit(data: ProviderFormData) {
     if (editingProvider) {
-      setProviders((prev) =>
-        prev.map((item) =>
-          item.id === editingProvider.id
-            ? { ...item, label: data.label, baseUrl: data.baseUrl, apiKey: data.apiKey }
-            : item,
-        ),
-      );
+      updateProvider(editingProvider.id, data);
     } else {
-      const newProvider: ProviderInfo = {
-        id: `provider-${Date.now()}`,
-        name: data.label.toLowerCase().replace(/\s+/g, "-"),
-        label: data.label,
-        baseUrl: data.baseUrl,
-        apiKey: data.apiKey,
-        isDefault: providers.length === 0,
-        models: [],
-      };
-      setProviders((prev) => [...prev, newProvider]);
+      addProvider(data);
     }
+  }
+
+  function handleAddPreset(preset: {
+    label: string;
+    baseUrl: string;
+    apiKey: string;
+    connectionMode: ConnectionMode;
+  }) {
+    const alreadyExists = providers.some(
+      (provider) => provider.label.toLowerCase() === preset.label.toLowerCase(),
+    );
+
+    if (alreadyExists) {
+      const existing = providers.find(
+        (provider) => provider.label.toLowerCase() === preset.label.toLowerCase(),
+      );
+      if (existing) {
+        handleEdit(existing);
+      }
+      return;
+    }
+
+    addProvider(preset);
+  }
+
+  function handleRefreshModels(provider: ProviderInfo) {
+    void refreshProviderModels(provider.id);
+  }
+
+  function handleSetDefault(provider: ProviderInfo) {
+    setDefaultProvider(provider.id);
   }
 
   return (
@@ -80,8 +103,38 @@ export default function SettingsPage() {
                   Add provider
                 </Button>
               </CardHeader>
-              <CardContent>
-                <ProvidersList providers={providers} onEdit={handleEdit} onDelete={handleDelete} />
+              <CardContent className="space-y-6">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <SparklesIcon className="size-4" />
+                    Quick add
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {PROVIDER_PRESETS.map((preset) => (
+                      <Button
+                        key={preset.label}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAddPreset(preset)}
+                      >
+                        {preset.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <ProvidersList
+                  providers={providers}
+                  onEdit={handleEdit}
+                  onDelete={handleDelete}
+                  onRefreshModels={handleRefreshModels}
+                  onSetDefault={handleSetDefault}
+                />
+
+                <div className="text-xs text-muted-foreground">
+                  Click the refresh icon next to a provider to fetch available models. Connection
+                  mode is remembered per provider.
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -117,6 +170,7 @@ export default function SettingsPage() {
         open={formOpen}
         onOpenChange={setFormOpen}
         onSubmit={handleSubmit}
+        existingProviders={providers}
       />
     </div>
   );
