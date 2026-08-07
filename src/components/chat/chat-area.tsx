@@ -4,13 +4,15 @@ import { ScrollArea } from "#components/ui/scroll-area";
 import { selectSelectedConversation, useChatStore } from "#store/chat";
 import { ChatHeader } from "./chat-header";
 import { EmptyState } from "./empty-state";
+import { MessageInput } from "./message-input";
 import { MessageList } from "./message-list";
 
 export function ChatArea() {
   const selectedConversation = useChatStore(selectSelectedConversation);
+  const providers = useChatStore((state) => state.providers);
 
   if (!selectedConversation) {
-    return <EmptyState />;
+    return <EmptyState providers={providers} />;
   }
 
   return (
@@ -21,6 +23,7 @@ export function ChatArea() {
           <MessageList conversation={selectedConversation} />
         </div>
       </ScrollArea>
+      <MessageInput />
     </div>
   );
 }
