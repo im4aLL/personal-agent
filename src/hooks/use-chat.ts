@@ -2,7 +2,9 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { type CoreMessage, type LanguageModel, streamText } from "#lib/ai";
+import { streamText } from "ai";
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { proxyFetch } from "#lib/ai";
 import type { Message, MessageModelInfo } from "#lib/types/chat";
 import {
   createMessageId,
@@ -11,11 +13,16 @@ import {
   useChatStore,
 } from "#store/chat";
 
+type CoreMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+};
+
 function buildCoreMessages(messages: Message[]): CoreMessage[] {
   return messages
     .filter((message) => message.role === "user" || message.role === "assistant")
     .map((message) => ({
-      role: message.role,
+      role: message.role as "user" | "assistant",
       content: message.content,
     }));
 }
@@ -84,26 +91,28 @@ export function useChat() {
       abortControllerRef.current = new AbortController();
       setIsGenerating(true);
 
-      const model: LanguageModel = {
-        provider: activeProvider.name,
-        modelId: selectedModel.modelId,
-        baseURL: activeProvider.baseUrl,
-        apiKey: activeProvider.apiKey,
-        connectionMode: activeProvider.connectionMode,
-      };
-
       try {
+        const fetchImpl =
+          activeProvider.connectionMode === "proxy" ? proxyFetch : undefined;
+
+        const provider = createOpenAICompatible({
+          name: activeProvider.name,
+          baseURL: activeProvider.baseUrl,
+          apiKey: activeProvider.apiKey,
+          fetch: fetchImpl,
+        });
+
+        const model = provider(selectedModel.modelId);
         const messages = buildCoreMessages([...conversation.messages, userMessage]);
-        const { textStream } = await streamText({
+
+        const { textStream } = streamText({
           model,
           messages,
           abortSignal: abortControllerRef.current.signal,
         });
 
-        for await (const part of textStream) {
-          if (part.type === "text-delta") {
-            appendMessageContent(conversation.id, assistantMessage.id, part.textDelta);
-          }
+        for await (const textDelta of textStream) {
+          appendMessageContent(conversation.id, assistantMessage.id, textDelta);
         }
 
         setMessageStatus(conversation.id, assistantMessage.id, "sent");

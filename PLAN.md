@@ -2,7 +2,7 @@
 
 ## Goal
 
-A desktop ChatGPT replacement built with Tauri v2, React 19, Tailwind v4, shadcn, Zustand, and manual SSE-based streaming.
+A desktop ChatGPT replacement built with Tauri v2, React 19, Tailwind v4, shadcn, Zustand, and the Vercel AI SDK (ai + @ai-sdk/openai-compatible).
 It supports any number of OpenAI-compatible providers (opencode-go is just one preset example), each configured with a label, base URL, and API key, with models fetched per provider.
 Conversations and messages persist in Turso (remote-only).
 The full-featured UI ships first as a navigable, non-functional prototype for look-and-feel approval; real functionality is then added one feature at a time.
@@ -25,10 +25,11 @@ The full-featured UI ships first as a navigable, non-functional prototype for lo
   LocalStorage credential loss is a complete-loss state; the hardening milestone includes a settings export of provider labels and base URLs (without keys) as a recovery aid.
 - AI calls: webview-direct fetch first, Rust proxy (`reqwest`) as CORS fallback (confirmed).
   The working mode is remembered per provider.
-- AI calls: manual SSE parsing via `fetch` with a Tauri proxy streaming fallback.
-  A custom `streamText` function handles OpenAI-compatible chat completions streaming, SSE buffer parsing, and reasoning/content delta extraction.
-  A custom `useChat` hook consumes the `textStream` async iterable and drives a Zustand store (single source of truth).
-  Abort is wired end-to-end via `AbortController` in the webview and `abort_stream` Tauri command on the Rust side.
+- AI calls: Vercel AI SDK (`ai` + `@ai-sdk/openai-compatible`).
+  `createOpenAICompatible` builds a provider instance with `baseURL`, `apiKey`, and a custom `fetch` (Tauri proxy streaming) when the provider is in proxy mode.
+  SDK `streamText` returns `textStream` (plain text deltas) and `fullStream` (typed reasoning chunks for Phase 7).
+  A custom `useChat` hook consumes `textStream` and drives a Zustand store (single source of truth).
+  Abort is wired end-to-end via `AbortController` + `abortSignal` in the SDK, which cancels the `proxyFetch` stream and the Rust `reqwest` request.
   This is verified early in Phase 3.
 - Turso remote-only: no local SQLite, no `tauri-plugin-sql`.
   Persistence goes through the libSQL HTTP pipeline API (same pattern as `personal-os/src/lib/turso.ts`).
@@ -44,7 +45,7 @@ Mirrors personal-os conventions: package.json `imports` aliases (`#components/*`
 
 ```
 personal-agent/
-  package.json                  # deps: react-router,
+  package.json                  # deps: ai, @ai-sdk/openai-compatible, react-router,
                                 # zustand, react-markdown, remark-gfm, rehype-highlight,
                                 # lucide-react, sonner, tailwind v4, shadcn deps
   vite.config.ts                # port 1420 pattern from personal-os
@@ -88,11 +89,11 @@ personal-agent/
       mock-data.ts              # seed providers, conversations, messages for Phase 1
       config.ts                 # localStorage get/set for providers, turso, theme
       providers.ts              # real CRUD + models fetch (Phase 2)
-      ai.ts                     # Custom AI client: SSE streaming, provider factory (Phase 3)
+      ai.ts                     # Tauri proxy fetch transport for Vercel AI SDK (Phase 3)
       turso.ts                  # libSQL HTTP pipeline, migrations (Phase 6)
       search.ts                 # client-side history filter (Phase 6)
     hooks/
-      use-chat.ts               # streamText wrapper driving the chat store (Phase 3)
+      use-chat.ts               # Vercel AI SDK streamText consumer driving the chat store (Phase 3)
   src-tauri/
     src/
       main.rs
@@ -202,7 +203,7 @@ Chat, streaming, reasoning, OS keychain, provider import/export, and any convers
 Tauri v2 commands are request/response; streaming needs a channel + custom `fetch` shim.
 This is likely the *common* path (CORS), not optional.
 Implement and verify before building any chat UX on top:
-- Implement `proxyFetch(provider, url, init)` in `lib/ai.ts` that returns a webview `Response` by sending the request through a Tauri channel and reading streamed chunks from the Rust side.
+- Implement `proxyFetch(url, init)` in `lib/ai.ts` with standard `fetch` signature that returns a webview `Response` by sending the request through a Tauri channel and reading streamed chunks from the Rust side.
 - Rust side: `proxy_stream` command that uses `reqwest` streaming + a Tauri channel to push chunks back to the webview.
 - Verify it streams a real chat completions call against a CORS-restricted OpenAI-compatible endpoint end-to-end, including `AbortController`/`stop` (aborting the webview consumer must also cancel the Rust `reqwest` request).
 - Only after this spike passes does the send/stream/stop UX get built on top.
@@ -214,17 +215,17 @@ Conversations live in memory only (lost on restart until Phase 6).
 
 ### Reasoning delta handling
 
-During this phase, reasoning deltas (`delta.reasoning_content` in SSE chunks) MUST be dropped, not concatenated into the message content.
+During this phase, reasoning deltas (from `fullStream` reasoning parts via the AI SDK) MUST be dropped, not concatenated into the message content.
 Write a passing unit test that verifies reasoning chunks are discarded while text deltas are accumulated.
 
 ### Implementation
 
-- `lib/ai.ts`: `proxyFetch` shim (from the spike) + per-request `createOpenAICompatible({ baseURL, apiKey, name })`, then custom `streamText` using `proxyFetch` as the fetch implementation when the provider is in proxy mode.
-- `hooks/use-chat.ts`: drives the chat store; sends via the conversation's provider, creates the user message and assistant placeholder, pipes custom `streamText` deltas into the store (dropping reasoning deltas), exposes `stop` via the abort controller, and handles completion and error statuses.
+- `lib/ai.ts`: `proxyFetch` shim with standard `fetch` signature (from the spike), passed as the `fetch` option to `createOpenAICompatible` when the provider is in proxy mode.
+- `hooks/use-chat.ts`: drives the chat store; creates provider via `createOpenAICompatible`, calls SDK `streamText`, pipes `textStream` (plain string deltas) into the store, exposes `stop` via the abort controller, and handles completion and error statuses. Reasoning deltas from `fullStream` are ignored in this phase.
 - Rust proxy extended with a `proxy_stream` command: `reqwest` streaming response body pushed over a Tauri channel; frontend consumes channel messages and constructs a streaming `Response`.
 - `AbortController` wired end-to-end: webview abort -> Tauri channel drop -> Rust `reqwest` request cancelled.
 - Input states: generating disables send and shows stop; streaming indicator on the active bubble; error toast plus an error message state with retry.
-- Unit tests: chat store reducers (send, stop, stream append, abort), reasoning-drop logic, SSE parse helpers.
+- Unit tests: chat store reducers (send, stop, stream append, abort), reasoning-drop logic.
 
 ### Verification
 
@@ -266,7 +267,7 @@ Date grouping in the sidebar reflects real `updatedAt` values.
 ### Implementation
 
 - Chat store conversation actions wired for real, replacing Phase 1 toasts.
-- Auto-title via a short non-streaming `generateText` call using the conversation's provider/model, run after the first exchange.
+- Auto-title via a short non-streaming SDK `generateText` call using the conversation's provider/model, run after the first exchange.
 - Unit tests: date grouping logic, title fallback, conversation CRUD reducers.
 
 ### Verification
@@ -327,9 +328,9 @@ Reasoning text from capable models streams into the collapsible thinking block a
 
 ### Implementation
 
-- Capture reasoning from the stream: parse `delta.reasoning_content` from SSE chunks in the custom `streamText` implementation.
+- Capture reasoning from the stream: consume `fullStream` reasoning parts via the AI SDK where the provider surfaces them.
 - Store into `message.reasoning` during streaming and render via the existing thinking block.
-- Unit tests: reasoning extraction from SSE chunks.
+- Unit tests: reasoning extraction from SDK `fullStream` parts.
 
 ### Verification
 
@@ -364,16 +365,16 @@ Use `vi.spyOn` on injected dependencies per the validated Metrix3UI approach.
 | Phase | Test targets |
 |---|---|
 | Phase 2 | Provider CRUD, validation, localStorage round-trip, duplicate detection |
-| Phase 3 | Chat store reducers (send, stop, stream append, abort), reasoning-drop logic, SSE parse helpers (custom) |
+| Phase 3 | Chat store reducers (send, stop, stream append, abort), reasoning-drop logic |
 | Phase 4 | Regenerate truncation, editMessage descendant removal, editedAt marker |
 | Phase 5 | Date grouping, title fallback, conversation CRUD reducers |
 | Phase 6 | Turso arg encoding, value parsing, schema idempotency, `tursoExecuteMany` pipeline assembly, search filter |
-| Phase 7 | Reasoning extraction from SSE chunks |
+| Phase 7 | Reasoning extraction from SDK fullStream parts |
 
 ### Integration (post-Phase 6, pre-delivery)
 
 - Provider registry and model fetch with mocked fetch (direct and proxy paths).
-- AI client with mocked custom `streamText`.
+- AI client with mocked SDK `streamText`.
 - Turso repositories with a mocked pipeline.
 
 ### E2E
