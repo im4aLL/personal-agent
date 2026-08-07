@@ -11,6 +11,7 @@ import { MOCK_CONVERSATIONS } from "#lib/mock-data";
 import type { ConnectionMode, ModelInfo, ProviderInput } from "#lib/providers";
 import { fetchProviderModels } from "#lib/providers";
 import type { Conversation, Message, MessageModelInfo } from "#lib/types/chat";
+import { applyMessageEdit, regenerateMessages } from "./chat-helpers";
 
 export type { ConnectionMode, ProviderInput };
 
@@ -42,6 +43,8 @@ export type ChatState = {
   setMessageStatus: (conversationId: string, messageId: string, status: Message["status"]) => void;
   setMessageError: (conversationId: string, messageId: string, error: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
+  regenerate: (conversationId: string) => void;
+  editMessage: (conversationId: string, messageId: string, content: string) => void;
   addProvider: (input: ProviderInput) => void;
   updateProvider: (id: string, input: ProviderInput) => void;
   deleteProvider: (id: string) => void;
@@ -264,6 +267,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversations: updateConversation(state, conversationId, (conversation) => ({
         ...conversation,
         messages: conversation.messages.filter((message) => message.id !== messageId),
+      })),
+    }));
+  },
+
+  regenerate: (conversationId) => {
+    set((state) => ({
+      conversations: updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: regenerateMessages(conversation.messages),
+      })),
+    }));
+  },
+
+  editMessage: (conversationId, messageId, content) => {
+    set((state) => ({
+      conversations: updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: applyMessageEdit(conversation.messages, messageId, content),
       })),
     }));
   },

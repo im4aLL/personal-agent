@@ -10,7 +10,7 @@ interface MessageListProps {
 }
 
 export function MessageList({ conversation }: MessageListProps) {
-  const { retry } = useChat();
+  const { retry, regenerate, editMessage, isGenerating } = useChat();
   const endRef = useRef<HTMLDivElement>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: conversation reference changes when messages update
@@ -28,7 +28,14 @@ export function MessageList({ conversation }: MessageListProps) {
         <MessageBubble
           key={message.id}
           message={message}
+          isGenerating={isGenerating}
           onRetry={message.status === "error" ? retry : undefined}
+          onRegenerate={
+            message.role === "assistant" && message.status !== "error" ? regenerate : undefined
+          }
+          onEdit={
+            message.role === "user" ? (content) => editMessage(message.id, content) : undefined
+          }
         />
       ))}
       <div ref={endRef} />

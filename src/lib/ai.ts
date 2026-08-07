@@ -108,14 +108,18 @@ function createStreamResponse(
  * Matches the standard `fetch` signature so it can be passed
  * as the `fetch` option to the Vercel AI SDK's createOpenAICompatible.
  */
-export async function proxyFetch(
-  input: RequestInfo | URL,
-  init?: RequestInit,
-): Promise<Response> {
+export async function proxyFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  const mergedInit = input instanceof Request
-    ? { method: input.method, headers: input.headers, body: input.body, signal: input.signal, ...init }
-    : init;
+  const mergedInit =
+    input instanceof Request
+      ? {
+          method: input.method,
+          headers: input.headers,
+          body: input.body,
+          signal: input.signal,
+          ...init,
+        }
+      : init;
 
   const abortId = createAbortId();
   const channel = new Channel<StreamChunk>();

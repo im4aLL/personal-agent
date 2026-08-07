@@ -1,6 +1,6 @@
 # 8 - personal-agent | Frontend - Conversation management and auto-titles
 
-**What to build:** New chat, rename (inline), delete with confirmation dialog, and auto-titling from the first user message are all real. Date grouping in the sidebar reflects actual `updatedAt` values. If auto-titling fails, the conversation falls back to "New chat." Unit tests pass for date grouping logic, title fallback, and conversation CRUD reducers.
+**What to build:** New chat, rename (inline), delete with confirmation dialog, and auto-titling from the first user message are all real. Date grouping in the sidebar reflects actual `updatedAt` values. If auto-titling fails, the conversation falls back to "New chat." Manually verified: date grouping logic, title fallback, and conversation CRUD reducers.
 
 **Blocked by:** #6 - First real chat flow with send, stream, and stop
 

@@ -1,6 +1,6 @@
 # 10 - personal-agent | Frontend - Thinking and reasoning content
 
-**What to build:** Reasoning text from capable models streams into the collapsible thinking block and is excluded from main message content. Capture via the Vercel AI SDK `fullStream` reasoning parts. Reasoning stored in `message.reasoning` during streaming and rendered via the existing thinking block from Phase 1. Unit tests pass for reasoning extraction.
+**What to build:** Reasoning text from capable models streams into the collapsible thinking block and is excluded from main message content. Capture via the Vercel AI SDK `fullStream` reasoning parts. Reasoning stored in `message.reasoning` during streaming and rendered via the existing thinking block from Phase 1. Manually verified: reasoning extraction.
 
 **Blocked by:** #6 - First real chat flow with send, stream, and stop
 

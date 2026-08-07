@@ -1,9 +1,9 @@
 "use client";
 
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import { streamText } from "ai";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { streamText } from "ai";
-import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { proxyFetch } from "#lib/ai";
 import type { Message, MessageModelInfo } from "#lib/types/chat";
 import {
@@ -37,6 +37,8 @@ export function useChat() {
   const setMessageStatus = useChatStore((state) => state.setMessageStatus);
   const setMessageError = useChatStore((state) => state.setMessageError);
   const deleteMessage = useChatStore((state) => state.deleteMessage);
+  const regenerateMessage = useChatStore((state) => state.regenerate);
+  const editMessageInStore = useChatStore((state) => state.editMessage);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -51,6 +53,84 @@ export function useChat() {
   const stop = useCallback(() => {
     abortControllerRef.current?.abort();
   }, []);
+
+  const streamAssistantResponse = useCallback(
+    async (conversationId: string, contextMessages: Message[]) => {
+      if (!activeProvider) {
+        return;
+      }
+
+      const modelInfo: MessageModelInfo = getSelectedModelInfo({
+        providers,
+        selectedModel,
+      });
+
+      const assistantMessage: Message = {
+        id: createMessageId(),
+        role: "assistant",
+        content: "",
+        status: "streaming",
+        createdAt: new Date(),
+        model: modelInfo,
+        thinkingLevel,
+      };
+
+      addMessage(conversationId, assistantMessage);
+
+      abortControllerRef.current = new AbortController();
+      setIsGenerating(true);
+
+      try {
+        const fetchImpl = activeProvider.connectionMode === "proxy" ? proxyFetch : undefined;
+
+        const provider = createOpenAICompatible({
+          name: activeProvider.name,
+          baseURL: activeProvider.baseUrl,
+          apiKey: activeProvider.apiKey,
+          fetch: fetchImpl,
+        });
+
+        const model = provider(selectedModel.modelId);
+        const messages = buildCoreMessages(contextMessages);
+
+        const { textStream } = streamText({
+          model,
+          messages,
+          abortSignal: abortControllerRef.current.signal,
+        });
+
+        for await (const textDelta of textStream) {
+          appendMessageContent(conversationId, assistantMessage.id, textDelta);
+        }
+
+        setMessageStatus(conversationId, assistantMessage.id, "sent");
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          setMessageStatus(conversationId, assistantMessage.id, "sent");
+          return;
+        }
+
+        const message = error instanceof Error ? error.message : "Failed to generate response";
+        setMessageError(conversationId, assistantMessage.id, message);
+        toast.error("Failed to generate response", {
+          description: message,
+        });
+      } finally {
+        setIsGenerating(false);
+        abortControllerRef.current = null;
+      }
+    },
+    [
+      activeProvider,
+      providers,
+      selectedModel,
+      thinkingLevel,
+      addMessage,
+      appendMessageContent,
+      setMessageStatus,
+      setMessageError,
+    ],
+  );
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -70,79 +150,60 @@ export function useChat() {
         createdAt: new Date(),
       };
 
-      const modelInfo: MessageModelInfo = getSelectedModelInfo({
-        providers,
-        selectedModel,
-      });
-
-      const assistantMessage: Message = {
-        id: createMessageId(),
-        role: "assistant",
-        content: "",
-        status: "streaming",
-        createdAt: new Date(),
-        model: modelInfo,
-        thinkingLevel,
-      };
-
       addMessage(conversation.id, userMessage);
-      addMessage(conversation.id, assistantMessage);
 
-      abortControllerRef.current = new AbortController();
-      setIsGenerating(true);
-
-      try {
-        const fetchImpl =
-          activeProvider.connectionMode === "proxy" ? proxyFetch : undefined;
-
-        const provider = createOpenAICompatible({
-          name: activeProvider.name,
-          baseURL: activeProvider.baseUrl,
-          apiKey: activeProvider.apiKey,
-          fetch: fetchImpl,
-        });
-
-        const model = provider(selectedModel.modelId);
-        const messages = buildCoreMessages([...conversation.messages, userMessage]);
-
-        const { textStream } = streamText({
-          model,
-          messages,
-          abortSignal: abortControllerRef.current.signal,
-        });
-
-        for await (const textDelta of textStream) {
-          appendMessageContent(conversation.id, assistantMessage.id, textDelta);
-        }
-
-        setMessageStatus(conversation.id, assistantMessage.id, "sent");
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          setMessageStatus(conversation.id, assistantMessage.id, "sent");
-          return;
-        }
-
-        const message = error instanceof Error ? error.message : "Failed to generate response";
-        setMessageError(conversation.id, assistantMessage.id, message);
-        toast.error("Failed to generate response", {
-          description: message,
-        });
-      } finally {
-        setIsGenerating(false);
-        abortControllerRef.current = null;
-      }
+      await streamAssistantResponse(conversation.id, [...conversation.messages, userMessage]);
     },
-    [
-      conversation,
-      activeProvider,
-      providers,
-      selectedModel,
-      thinkingLevel,
-      addMessage,
-      appendMessageContent,
-      setMessageStatus,
-      setMessageError,
-    ],
+    [conversation, activeProvider, addMessage, streamAssistantResponse],
+  );
+
+  const regenerate = useCallback(async () => {
+    if (!conversation || !activeProvider) {
+      return;
+    }
+
+    const lastMessage = conversation.messages[conversation.messages.length - 1];
+    if (lastMessage?.role !== "assistant") {
+      return;
+    }
+
+    regenerateMessage(conversation.id);
+
+    const currentConversation = useChatStore
+      .getState()
+      .conversations.find((item) => item.id === conversation.id);
+
+    if (!currentConversation || currentConversation.messages.length === 0) {
+      return;
+    }
+
+    await streamAssistantResponse(currentConversation.id, currentConversation.messages);
+  }, [conversation, activeProvider, regenerateMessage, streamAssistantResponse]);
+
+  const editMessage = useCallback(
+    async (messageId: string, content: string) => {
+      if (!conversation || !activeProvider) {
+        return;
+      }
+
+      const target = conversation.messages.find((message) => message.id === messageId);
+      if (target?.role !== "user") {
+        return;
+      }
+
+      editMessageInStore(conversation.id, messageId, content);
+
+      const currentConversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === conversation.id);
+
+      if (!currentConversation || currentConversation.messages.length === 0) {
+        return;
+      }
+
+      await streamAssistantResponse(currentConversation.id, currentConversation.messages);
+    },
+    [conversation, activeProvider, editMessageInStore, streamAssistantResponse],
   );
 
   const retry = useCallback(() => {
@@ -193,5 +254,7 @@ export function useChat() {
     sendMessage,
     stop,
     retry,
+    regenerate,
+    editMessage,
   };
 }
