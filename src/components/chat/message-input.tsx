@@ -6,7 +6,6 @@ import {
   ChevronDownIcon,
   Loader2Icon,
   PaperclipIcon,
-  RefreshCwIcon,
   SquareIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -24,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "#components/ui/dropdown-menu";
 import { Textarea } from "#components/ui/textarea";
+import { useChat } from "#hooks/use-chat";
 import { useChatStore } from "#store/chat";
 
 const THINKING_OPTIONS = [
@@ -112,7 +112,7 @@ function ModelSelector() {
                     handleRetry(provider.id);
                   }}
                 >
-                  <RefreshCwIcon className="mr-2 size-4" />
+                  <Loader2Icon className="mr-2 size-4" />
                   Error: {provider.modelsError}
                 </DropdownMenuItem>
               )}
@@ -188,23 +188,17 @@ function ThinkingSelector() {
 
 export function MessageInput() {
   const [value, setValue] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const sendMessage = useChatStore((state) => state.sendMessage);
+  const { sendMessage, stop, isGenerating, canSend } = useChat();
 
   function handleSend() {
     const trimmed = value.trim();
-    if (!trimmed) return;
-    setIsGenerating(true);
-    sendMessage(trimmed);
+    if (!trimmed || isGenerating || !canSend) return;
     setValue("");
-    setIsGenerating(false);
+    void sendMessage(trimmed);
   }
 
   function handleStop() {
-    setIsGenerating(false);
-    toast("Coming soon", {
-      description: "Stop generation is not implemented yet.",
-    });
+    stop();
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -229,7 +223,7 @@ export function MessageInput() {
       <div className="relative flex flex-col rounded-2xl border bg-background p-3 dark:bg-transparent">
         <div className="flex items-end gap-2">
           <Textarea
-            placeholder="Message..."
+            placeholder={canSend ? "Message..." : "Select a provider and model to start chatting"}
             value={value}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={handleKeyDown}
@@ -254,7 +248,7 @@ export function MessageInput() {
                 type="button"
                 size="icon-sm"
                 aria-label="Send message"
-                disabled={!value.trim()}
+                disabled={!value.trim() || !canSend}
                 onClick={handleSend}
               >
                 <ArrowUpIcon className="size-4" />

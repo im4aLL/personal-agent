@@ -20,6 +20,7 @@ export type Message = {
   content: string;
   reasoning?: ThinkingBlock;
   status?: MessageStatus;
+  error?: string;
   editedAt?: Date;
   createdAt: Date;
   model?: MessageModelInfo;

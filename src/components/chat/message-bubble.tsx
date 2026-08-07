@@ -1,6 +1,15 @@
 "use client";
 
-import { BotIcon, CopyIcon, PencilIcon, RefreshCwIcon, UserIcon } from "lucide-react";
+import {
+  AlertCircleIcon,
+  BotIcon,
+  CopyIcon,
+  Loader2Icon,
+  PencilIcon,
+  RefreshCwIcon,
+  UserIcon,
+} from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "#components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#components/ui/tooltip";
@@ -11,6 +20,7 @@ import { ThinkingBlock } from "./thinking-block";
 
 interface MessageBubbleProps {
   message: Message;
+  onRetry?: () => void;
 }
 
 function handleAction(action: string) {
@@ -19,8 +29,23 @@ function handleAction(action: string) {
   });
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, onRetry }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const isStreaming = message.status === "streaming";
+  const isError = message.status === "error";
+
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      toast.success("Copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy");
+    }
+  }
 
   return (
     <div className={cn("group/message flex gap-3 py-4", isUser ? "justify-end" : "justify-start")}>
@@ -37,8 +62,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             isUser
               ? "bg-primary text-primary-foreground rounded-br-sm dark:bg-secondary-foreground/15 dark:text-secondary-foreground"
               : "bg-secondary text-secondary-foreground rounded-bl-sm",
+            isError && "border border-destructive/50 bg-destructive/10",
           )}
         >
+          {isError && (
+            <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-destructive">
+              <AlertCircleIcon className="size-4" />
+              Error
+            </div>
+          )}
           {message.reasoning && (
             <ThinkingBlock
               content={message.reasoning.content}
@@ -48,6 +80,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           <Markdown className={cn("[&_p:last-child]:mb-0", isUser && "prose-invert")}>
             {message.content}
           </Markdown>
+          {isStreaming && (
+            <span className="ml-1 inline-flex h-4 w-4 align-middle">
+              <Loader2Icon className="size-4 animate-spin text-muted-foreground" />
+            </span>
+          )}
+          {message.error && <p className="mt-2 text-xs text-destructive">{message.error}</p>}
         </div>
 
         {!isUser && message.model && (
@@ -83,16 +121,32 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               <Button
                 variant="ghost"
                 size="icon-xs"
-                aria-label="Copy message"
-                onClick={() => handleAction("Copy")}
+                aria-label={copied ? "Copied" : "Copy message"}
+                onClick={handleCopy}
               >
                 <CopyIcon className="size-3" />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Copy</TooltipContent>
+            <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
           </Tooltip>
 
-          {!isUser && (
+          {!isUser && isError && onRetry && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Retry generation"
+                  onClick={onRetry}
+                >
+                  <RefreshCwIcon className="size-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Retry</TooltipContent>
+            </Tooltip>
+          )}
+
+          {!isUser && !isError && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

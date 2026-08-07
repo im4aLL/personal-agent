@@ -37,7 +37,11 @@ export type ChatState = {
   setSelectedModel: (providerId: string, modelId: string) => void;
   setConversations: (conversations: Conversation[]) => void;
   setThinkingLevel: (level: string) => void;
-  sendMessage: (content: string) => void;
+  addMessage: (conversationId: string, message: Message) => void;
+  appendMessageContent: (conversationId: string, messageId: string, delta: string) => void;
+  setMessageStatus: (conversationId: string, messageId: string, status: Message["status"]) => void;
+  setMessageError: (conversationId: string, messageId: string, error: string) => void;
+  deleteMessage: (conversationId: string, messageId: string) => void;
   addProvider: (input: ProviderInput) => void;
   updateProvider: (id: string, input: ProviderInput) => void;
   deleteProvider: (id: string) => void;
@@ -83,16 +87,7 @@ const DEFAULT_MODEL = {
   modelId: "openai/gpt-4o",
 };
 
-const DEFAULT_MESSAGE_MODEL: MessageModelInfo = {
-  providerId: "opencode-go",
-  providerName: "Opencode Go",
-  modelId: "openai/gpt-4o",
-  modelName: "GPT-4o",
-};
-
-const CONVERSATIONS_STORAGE_KEY = "personal-agent-conversations";
-
-function createProviderId(label: string): string {
+export function createProviderId(label: string): string {
   return `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now()}`;
 }
 
@@ -140,57 +135,16 @@ function loadModelSelection(): { providerId: string; modelId: string } {
 }
 
 function loadConversations(): Conversation[] {
-  if (typeof window === "undefined") {
-    return MOCK_CONVERSATIONS;
-  }
-
-  try {
-    const raw = window.localStorage.getItem(CONVERSATIONS_STORAGE_KEY);
-    if (!raw) {
-      return MOCK_CONVERSATIONS;
-    }
-
-    const parsed = JSON.parse(raw) as unknown[];
-    if (!Array.isArray(parsed)) {
-      return MOCK_CONVERSATIONS;
-    }
-
-    return parsed.map((item) => ({
-      ...(item as Conversation),
-      createdAt: new Date((item as Conversation).createdAt),
-      updatedAt: new Date((item as Conversation).updatedAt),
-      messages: ((item as Conversation).messages ?? []).map((message) => ({
-        ...message,
-        model:
-          message.role === "assistant" && !message.model ? DEFAULT_MESSAGE_MODEL : message.model,
-        thinkingLevel:
-          message.role === "assistant" && !message.thinkingLevel ? "off" : message.thinkingLevel,
-        createdAt: new Date(message.createdAt),
-        editedAt: message.editedAt ? new Date(message.editedAt) : undefined,
-      })),
-    }));
-  } catch {
-    return MOCK_CONVERSATIONS;
-  }
+  return MOCK_CONVERSATIONS;
 }
 
-function saveConversations(conversations: Conversation[]) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(CONVERSATIONS_STORAGE_KEY, JSON.stringify(conversations));
-  } catch {
-    // Ignore storage errors (e.g. private mode).
-  }
-}
-
-function createMessageId(): string {
+export function createMessageId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function getSelectedModelInfo(state: ChatState): MessageModelInfo {
+export function getSelectedModelInfo(
+  state: Pick<ChatState, "providers" | "selectedModel">,
+): MessageModelInfo {
   const provider = state.providers.find((item) => item.id === state.selectedModel.providerId);
   const model = provider?.models.find((item) => item.id === state.selectedModel.modelId);
 
@@ -221,6 +175,18 @@ function persistSelectedModel(selection: { providerId: string; modelId: string }
   saveSelectedModel(toStoredModelSelection(selection.providerId, selection.modelId));
 }
 
+function updateConversation(
+  state: ChatState,
+  conversationId: string,
+  updater: (conversation: Conversation) => Conversation,
+): Conversation[] {
+  return state.conversations.map((conversation) =>
+    conversation.id === conversationId
+      ? updater({ ...conversation, updatedAt: new Date() })
+      : conversation,
+  );
+}
+
 export const useChatStore = create<ChatState>((set, get) => ({
   conversations: loadConversations(),
   selectedConversationId: null,
@@ -238,46 +204,55 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setConversations: (conversations) => set({ conversations }),
   setThinkingLevel: (level) => set({ thinkingLevel: level }),
 
-  sendMessage: (content) => {
-    const state = get();
-    const conversationId = state.selectedConversationId;
-    if (!conversationId) {
-      return;
-    }
+  addMessage: (conversationId, message) => {
+    set((state) => ({
+      conversations: updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: [...conversation.messages, message],
+      })),
+    }));
+  },
 
-    const conversation = state.conversations.find((item) => item.id === conversationId);
-    if (!conversation) {
-      return;
-    }
+  appendMessageContent: (conversationId, messageId, delta) => {
+    set((state) => ({
+      conversations: updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) =>
+          message.id === messageId ? { ...message, content: message.content + delta } : message,
+        ),
+      })),
+    }));
+  },
 
-    const now = new Date();
-    const modelInfo = getSelectedModelInfo(state);
-    const userMessage: Message = {
-      id: createMessageId(),
-      role: "user",
-      content,
-      createdAt: now,
-    };
-    const assistantMessage: Message = {
-      id: createMessageId(),
-      role: "assistant",
-      content: `Mock response using ${modelInfo.providerName} / ${modelInfo.modelName} (thinking: ${state.thinkingLevel}).`,
-      createdAt: new Date(now.getTime() + 1),
-      model: modelInfo,
-      thinkingLevel: state.thinkingLevel,
-    };
+  setMessageStatus: (conversationId, messageId, status) => {
+    set((state) => ({
+      conversations: updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) =>
+          message.id === messageId ? { ...message, status } : message,
+        ),
+      })),
+    }));
+  },
 
-    const updatedConversation: Conversation = {
-      ...conversation,
-      messages: [...conversation.messages, userMessage, assistantMessage],
-      updatedAt: now,
-    };
+  setMessageError: (conversationId, messageId, error) => {
+    set((state) => ({
+      conversations: updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) =>
+          message.id === messageId ? { ...message, status: "error" as const, error } : message,
+        ),
+      })),
+    }));
+  },
 
-    set({
-      conversations: state.conversations.map((item) =>
-        item.id === conversationId ? updatedConversation : item,
-      ),
-    });
+  deleteMessage: (conversationId, messageId) => {
+    set((state) => ({
+      conversations: updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: conversation.messages.filter((message) => message.id !== messageId),
+      })),
+    }));
   },
 
   addProvider: (input) => {
@@ -396,12 +371,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 }));
-
-saveConversations(useChatStore.getState().conversations);
-
-useChatStore.subscribe((state) => {
-  saveConversations(state.conversations);
-});
 
 export function selectSelectedConversation(state: ChatState): Conversation | null {
   if (!state.selectedConversationId) {

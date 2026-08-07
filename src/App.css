@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "highlight.js/styles/github.css";
 @import "./styles/highlight-dark.css";
+@plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -120,6 +121,14 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  html,
+  body,
+  #root {
+    @apply h-full;
+  }
+  body {
+    @apply overflow-hidden;
   }
 }
 

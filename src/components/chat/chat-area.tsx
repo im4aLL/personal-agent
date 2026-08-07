@@ -1,6 +1,5 @@
 "use client";
 
-import { ScrollArea } from "#components/ui/scroll-area";
 import { selectSelectedConversation, useChatStore } from "#store/chat";
 import { ChatHeader } from "./chat-header";
 import { EmptyState } from "./empty-state";
@@ -16,13 +15,13 @@ export function ChatArea() {
   }
 
   return (
-    <div className="flex flex-1 flex-col min-w-0">
+    <div className="flex min-h-0 flex-1 flex-col min-w-0">
       <ChatHeader title={selectedConversation.title} />
-      <ScrollArea className="flex-1">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="w-full px-4 pb-8">
           <MessageList conversation={selectedConversation} />
         </div>
-      </ScrollArea>
+      </div>
       <MessageInput />
     </div>
   );

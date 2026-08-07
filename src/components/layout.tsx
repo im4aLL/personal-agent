@@ -7,12 +7,14 @@ import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 export function Layout() {
   return (
     <ThemeProvider>
-      <SidebarProvider>
-        <AppSidebar />
-        <SidebarInset>
-          <Outlet />
-        </SidebarInset>
-      </SidebarProvider>
+      <div className="flex h-svh overflow-hidden">
+        <SidebarProvider>
+          <AppSidebar />
+          <SidebarInset className="min-h-0">
+            <Outlet />
+          </SidebarInset>
+        </SidebarProvider>
+      </div>
       <Toaster />
     </ThemeProvider>
   );
