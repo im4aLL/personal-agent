@@ -1,7 +1,6 @@
 ---
 name: capture-project-rules
 description: Save confirmed reusable guidance in AGENTS.md or personal preferences in memory.
-disable-model-invocation: true
 ---
 
 # Capture Project Rules
@@ -31,6 +30,7 @@ Do not use it for ordinary task requirements, temporary constraints, or one-off 
    "<proposed instruction>"
 
    Should I save it as:
+
    1. a project rule in `AGENTS.md`,
    2. a personal preference in memory, or
    3. not save it?

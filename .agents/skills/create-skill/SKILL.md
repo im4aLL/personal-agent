@@ -1,7 +1,6 @@
 ---
 name: create-skill
 description: Create or refine a local repository skill and sync generated agent assets.
-disable-model-invocation: true
 ---
 
 # Create Skill
