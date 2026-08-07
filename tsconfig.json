@@ -12,7 +12,6 @@
     "resolveJsonModule": true,
     "resolvePackageJsonImports": true,
     "isolatedModules": true,
-    "baseUrl": ".",
     "paths": {
       "#components/*": ["./src/components/*"],
       "#lib/*": ["./src/lib/*"],

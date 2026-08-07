@@ -1,14 +1,19 @@
 import { Outlet } from "react-router-dom";
+import { Toaster } from "#components/ui/sonner";
 import { AppSidebar } from "./app-sidebar";
-import { SidebarProvider } from "./ui/sidebar";
+import { ThemeProvider } from "./theme-provider";
+import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 
 export function Layout() {
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <main className="flex-1 flex flex-col min-h-0">
-        <Outlet />
-      </main>
-    </SidebarProvider>
+    <ThemeProvider>
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <Outlet />
+        </SidebarInset>
+      </SidebarProvider>
+      <Toaster />
+    </ThemeProvider>
   );
 }
