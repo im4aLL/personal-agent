@@ -3,8 +3,8 @@ import type { Conversation, MessageModelInfo } from "#lib/types/chat";
 const DEFAULT_MESSAGE_MODEL: MessageModelInfo = {
   providerId: "opencode-go",
   providerName: "Opencode Go",
-  modelId: "openai/gpt-4o",
-  modelName: "GPT-4o",
+  modelId: "mimo-v2.5",
+  modelName: "MiMo-V2.5",
 };
 
 export const MOCK_CONVERSATIONS: Conversation[] = [

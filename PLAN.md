@@ -2,7 +2,7 @@
 
 ## Goal
 
-A desktop ChatGPT replacement built with Tauri v2, React 19, Tailwind v4, shadcn, Zustand, and the Vercel AI SDK.
+A desktop ChatGPT replacement built with Tauri v2, React 19, Tailwind v4, shadcn, Zustand, and manual SSE-based streaming.
 It supports any number of OpenAI-compatible providers (opencode-go is just one preset example), each configured with a label, base URL, and API key, with models fetched per provider.
 Conversations and messages persist in Turso (remote-only).
 The full-featured UI ships first as a navigable, non-functional prototype for look-and-feel approval; real functionality is then added one feature at a time.
@@ -25,9 +25,10 @@ The full-featured UI ships first as a navigable, non-functional prototype for lo
   LocalStorage credential loss is a complete-loss state; the hardening milestone includes a settings export of provider labels and base URLs (without keys) as a recovery aid.
 - AI calls: webview-direct fetch first, Rust proxy (`reqwest`) as CORS fallback (confirmed).
   The working mode is remembered per provider.
-- AI SDK usage: `ai` v5 with `@ai-sdk/openai-compatible`.
-  A custom hook consumes `streamText` output and drives a Zustand store (single source of truth), instead of `useChat`, because base URL and key vary per provider and we need abort, reasoning capture, and store integration.
-  Risk: if `streamText` proves unreliable in the webview, fall back to manual SSE parsing behind the same hook interface.
+- AI calls: manual SSE parsing via `fetch` with a Tauri proxy streaming fallback.
+  A custom `streamText` function handles OpenAI-compatible chat completions streaming, SSE buffer parsing, and reasoning/content delta extraction.
+  A custom `useChat` hook consumes the `textStream` async iterable and drives a Zustand store (single source of truth).
+  Abort is wired end-to-end via `AbortController` in the webview and `abort_stream` Tauri command on the Rust side.
   This is verified early in Phase 3.
 - Turso remote-only: no local SQLite, no `tauri-plugin-sql`.
   Persistence goes through the libSQL HTTP pipeline API (same pattern as `personal-os/src/lib/turso.ts`).
@@ -43,7 +44,7 @@ Mirrors personal-os conventions: package.json `imports` aliases (`#components/*`
 
 ```
 personal-agent/
-  package.json                  # deps: ai, @ai-sdk/openai-compatible, react-router,
+  package.json                  # deps: react-router,
                                 # zustand, react-markdown, remark-gfm, rehype-highlight,
                                 # lucide-react, sonner, tailwind v4, shadcn deps
   vite.config.ts                # port 1420 pattern from personal-os
@@ -87,7 +88,7 @@ personal-agent/
       mock-data.ts              # seed providers, conversations, messages for Phase 1
       config.ts                 # localStorage get/set for providers, turso, theme
       providers.ts              # real CRUD + models fetch (Phase 2)
-      ai.ts                     # AI SDK client factory per provider (Phase 3)
+      ai.ts                     # Custom AI client: SSE streaming, provider factory (Phase 3)
       turso.ts                  # libSQL HTTP pipeline, migrations (Phase 6)
       search.ts                 # client-side history filter (Phase 6)
     hooks/
@@ -130,7 +131,7 @@ No provider, chat, or network code exists yet.
 
 ### Deliberately deferred
 
-Every UI component, mock data, stores, Rust proxy, Turso, and AI SDK code.
+Every UI component, mock data, stores, Rust proxy, Turso, and AI client code.
 
 ## Phase 1: Complete UI prototype (approval gate)
 
@@ -157,7 +158,7 @@ Explicit user sign-off ends this phase.
 
 ### Deliberately deferred
 
-All persistence, network calls, AI SDK wiring, Rust commands beyond the scaffold, Turso, real search, and tests (Phase 1 is purely visual; tests land after behavior stabilizes).
+All persistence, network calls, AI client wiring, Rust commands beyond the scaffold, Turso, real search, and tests (Phase 1 is purely visual; tests land after behavior stabilizes).
 
 ## Phase 2: Real provider management and model discovery
 
@@ -203,7 +204,7 @@ This is likely the *common* path (CORS), not optional.
 Implement and verify before building any chat UX on top:
 - Implement `proxyFetch(provider, url, init)` in `lib/ai.ts` that returns a webview `Response` by sending the request through a Tauri channel and reading streamed chunks from the Rust side.
 - Rust side: `proxy_stream` command that uses `reqwest` streaming + a Tauri channel to push chunks back to the webview.
-- Verify it streams a real `streamText` call against a CORS-restricted OpenAI-compatible endpoint end-to-end, including `AbortController`/`stop` (aborting the webview consumer must also cancel the Rust `reqwest` request).
+- Verify it streams a real chat completions call against a CORS-restricted OpenAI-compatible endpoint end-to-end, including `AbortController`/`stop` (aborting the webview consumer must also cancel the Rust `reqwest` request).
 - Only after this spike passes does the send/stream/stop UX get built on top.
 
 ### Outcome
@@ -213,13 +214,13 @@ Conversations live in memory only (lost on restart until Phase 6).
 
 ### Reasoning delta handling
 
-During this phase, reasoning deltas (both `delta.reasoning_content` in manual SSE and `fullStream` reasoning parts in the SDK) MUST be dropped, not concatenated into the message content.
+During this phase, reasoning deltas (`delta.reasoning_content` in SSE chunks) MUST be dropped, not concatenated into the message content.
 Write a passing unit test that verifies reasoning chunks are discarded while text deltas are accumulated.
 
 ### Implementation
 
-- `lib/ai.ts`: `proxyFetch` shim (from the spike) + per-request `createOpenAICompatible({ baseURL, apiKey, name })`, then `streamText` using `proxyFetch` as the fetch implementation when the provider is in proxy mode.
-- `hooks/use-chat.ts`: drives the chat store; sends via the conversation's provider, creates the user message and assistant placeholder, pipes `textStream` deltas into the store (dropping reasoning deltas), exposes `stop` via the abort controller, and handles completion and error statuses.
+- `lib/ai.ts`: `proxyFetch` shim (from the spike) + per-request `createOpenAICompatible({ baseURL, apiKey, name })`, then custom `streamText` using `proxyFetch` as the fetch implementation when the provider is in proxy mode.
+- `hooks/use-chat.ts`: drives the chat store; sends via the conversation's provider, creates the user message and assistant placeholder, pipes custom `streamText` deltas into the store (dropping reasoning deltas), exposes `stop` via the abort controller, and handles completion and error statuses.
 - Rust proxy extended with a `proxy_stream` command: `reqwest` streaming response body pushed over a Tauri channel; frontend consumes channel messages and constructs a streaming `Response`.
 - `AbortController` wired end-to-end: webview abort -> Tauri channel drop -> Rust `reqwest` request cancelled.
 - Input states: generating disables send and shows stop; streaming indicator on the active bubble; error toast plus an error message state with retry.
@@ -326,10 +327,9 @@ Reasoning text from capable models streams into the collapsible thinking block a
 
 ### Implementation
 
-- Capture reasoning from the stream: consume `fullStream` reasoning parts via the AI SDK where the provider surfaces them (this is the primary path).
-  The manual SSE fallback only needs `delta.reasoning_content` parsing for endpoints the SDK does not already normalize.
+- Capture reasoning from the stream: parse `delta.reasoning_content` from SSE chunks in the custom `streamText` implementation.
 - Store into `message.reasoning` during streaming and render via the existing thinking block.
-- Unit tests: reasoning extraction from both `fullStream` and manual SSE paths.
+- Unit tests: reasoning extraction from SSE chunks.
 
 ### Verification
 
@@ -364,16 +364,16 @@ Use `vi.spyOn` on injected dependencies per the validated Metrix3UI approach.
 | Phase | Test targets |
 |---|---|
 | Phase 2 | Provider CRUD, validation, localStorage round-trip, duplicate detection |
-| Phase 3 | Chat store reducers (send, stop, stream append, abort), reasoning-drop logic, SSE parse helpers |
+| Phase 3 | Chat store reducers (send, stop, stream append, abort), reasoning-drop logic, SSE parse helpers (custom) |
 | Phase 4 | Regenerate truncation, editMessage descendant removal, editedAt marker |
 | Phase 5 | Date grouping, title fallback, conversation CRUD reducers |
 | Phase 6 | Turso arg encoding, value parsing, schema idempotency, `tursoExecuteMany` pipeline assembly, search filter |
-| Phase 7 | Reasoning extraction from `fullStream` and manual SSE paths |
+| Phase 7 | Reasoning extraction from SSE chunks |
 
 ### Integration (post-Phase 6, pre-delivery)
 
 - Provider registry and model fetch with mocked fetch (direct and proxy paths).
-- AI client with mocked `streamText`.
+- AI client with mocked custom `streamText`.
 - Turso repositories with a mocked pipeline.
 
 ### E2E
@@ -400,7 +400,7 @@ Add tests for every defect discovered during phases.
 - Observable early result: yes, the Phase 1 prototype is the earliest deliverable and is entirely reviewable by running the app.
 - Phase 1 runs independently: yes, scaffold (Milestone 0) makes it runnable; no backend is required.
 - Each milestone builds on a working flow and leaves the app runnable: yes, every phase is independently verifiable.
-- Architecture sufficient but not speculative: yes, structure mirrors proven personal-os patterns; AI SDK and Turso details are deferred to the phases that need them.
+- Architecture sufficient but not speculative: yes, structure mirrors proven personal-os patterns; AI client and Turso details are deferred to the phases that need them.
 - UI before frontend infrastructure and backend layers: yes, by explicit user mandate.
 - Deferred work is explicit: yes, every phase lists its deferrals; the Phase 1 live-vs-noop line is called out as a decision.
 - Tests come after behavior stabilizes and before delivery: yes, per the testing milestone.

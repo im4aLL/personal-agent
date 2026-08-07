@@ -64,7 +64,7 @@ export const PROVIDER_PRESETS: ProviderInput[] = [
   },
   {
     label: "Ollama",
-    baseUrl: "http://localhost:11434",
+    baseUrl: "http://localhost:11434/v1",
     apiKey: "",
     connectionMode: "direct",
   },
@@ -84,7 +84,7 @@ export const PROVIDER_PRESETS: ProviderInput[] = [
 
 const DEFAULT_MODEL = {
   providerId: "opencode-go",
-  modelId: "openai/gpt-4o",
+  modelId: "mimo-v2.5",
 };
 
 export function createProviderId(label: string): string {
@@ -93,6 +93,18 @@ export function createProviderId(label: string): string {
 
 function createProviderName(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+}
+
+function parseManualModels(value: string | undefined): ModelInfo[] {
+  if (!value) {
+    return [];
+  }
+
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+    .map((id) => ({ id, name: id }));
 }
 
 function buildPresetProviders(): ProviderInfo[] {
@@ -113,7 +125,7 @@ function loadProviderState(): ProviderInfo[] {
   if (stored && stored.length > 0) {
     return stored.map((item) => ({
       ...item,
-      models: [],
+      models: item.models ? item.models.map((id) => ({ id, name: id })) : [],
       isLoadingModels: false,
       modelsError: null,
     }));
@@ -166,6 +178,7 @@ function persistProviders(providers: ProviderInfo[]) {
       apiKey: provider.apiKey,
       isDefault: provider.isDefault,
       connectionMode: provider.connectionMode,
+      models: provider.models.map((model) => model.id),
     }),
   );
   saveProviders(stored);
@@ -265,7 +278,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       apiKey: input.apiKey,
       isDefault: state.providers.length === 0,
       connectionMode: input.connectionMode,
-      models: [],
+      models: parseManualModels(input.models),
       isLoadingModels: false,
       modelsError: null,
     };
@@ -286,7 +299,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             baseUrl: input.baseUrl,
             apiKey: input.apiKey,
             connectionMode: input.connectionMode,
-            models: [],
+            models: parseManualModels(input.models),
             modelsError: null,
           }
         : provider,
@@ -357,13 +370,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
           : item,
       );
 
-      set({ providers: nextProviders });
-      persistProviders(nextProviders);
+      const selectedModel = nextState.selectedModel;
+      if (
+        selectedModel.providerId === providerId &&
+        result.models.length > 0 &&
+        !result.models.some((model) => model.id === selectedModel.modelId)
+      ) {
+        const fallbackModelId = result.models[0]?.id ?? selectedModel.modelId;
+        set({
+          providers: nextProviders,
+          selectedModel: { providerId, modelId: fallbackModelId },
+        });
+        persistProviders(nextProviders);
+        persistSelectedModel({ providerId, modelId: fallbackModelId });
+      } else {
+        set({ providers: nextProviders });
+        persistProviders(nextProviders);
+      }
     } catch (error) {
       const nextState = get();
       const message = error instanceof Error ? error.message : "Failed to fetch models";
+      const currentProvider = nextState.providers.find((item) => item.id === providerId);
+      const fallbackModels = currentProvider?.models ?? [];
+
       const nextProviders = nextState.providers.map((item) =>
-        item.id === providerId ? { ...item, isLoadingModels: false, modelsError: message } : item,
+        item.id === providerId
+          ? {
+              ...item,
+              isLoadingModels: false,
+              modelsError: fallbackModels.length === 0 ? message : null,
+            }
+          : item,
       );
 
       set({ providers: nextProviders });

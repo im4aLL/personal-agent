@@ -27,12 +27,13 @@ interface ProviderFormProps {
   existingProviders: ProviderInfo[];
 }
 
-type FormField = "label" | "baseUrl" | "apiKey";
+type FormField = "label" | "baseUrl" | "apiKey" | "models";
 
 type FormState = {
   label: string;
   baseUrl: string;
   apiKey: string;
+  models: string;
   connectionMode: ConnectionMode;
   touched: Record<FormField, boolean>;
 };
@@ -53,8 +54,9 @@ function getInitialState(provider: ProviderInfo | null | undefined): FormState {
     label: provider?.label ?? "",
     baseUrl: provider?.baseUrl ?? "",
     apiKey: provider?.apiKey ?? "",
+    models: provider?.models.map((model) => model.id).join(", ") ?? "",
     connectionMode: provider?.connectionMode ?? "direct",
-    touched: { label: isEditing, baseUrl: isEditing, apiKey: isEditing },
+    touched: { label: isEditing, baseUrl: isEditing, apiKey: isEditing, models: isEditing },
   };
 }
 
@@ -99,7 +101,7 @@ export function ProviderForm({
   async function handleTestConnection() {
     setForm((prev) => ({
       ...prev,
-      touched: { label: true, baseUrl: true, apiKey: true },
+      touched: { label: true, baseUrl: true, apiKey: true, models: true },
     }));
 
     if (!isValid) {
@@ -128,7 +130,7 @@ export function ProviderForm({
 
     setForm((prev) => ({
       ...prev,
-      touched: { label: true, baseUrl: true, apiKey: true },
+      touched: { label: true, baseUrl: true, apiKey: true, models: true },
     }));
 
     if (!isValid) {
@@ -140,6 +142,7 @@ export function ProviderForm({
       baseUrl: form.baseUrl.trim(),
       apiKey: form.apiKey,
       connectionMode: form.connectionMode,
+      models: form.models,
     });
 
     onOpenChange(false);
@@ -186,11 +189,29 @@ export function ProviderForm({
                 aria-invalid={Boolean(baseUrlError)}
                 aria-describedby={baseUrlError ? "provider-base-url-error" : undefined}
               />
+              <p className="text-xs text-muted-foreground">
+                Include the API version prefix, e.g. /v1 for OpenAI-compatible endpoints.
+              </p>
               {baseUrlError && (
                 <p id="provider-base-url-error" className="text-sm text-destructive">
                   {baseUrlError}
                 </p>
               )}
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="provider-models">Models (optional)</Label>
+              <Input
+                id="provider-models"
+                placeholder="e.g. gpt-4o, claude-3-opus"
+                value={form.models}
+                onChange={(event) => updateField("models", event.target.value)}
+                onBlur={() => markTouched("models")}
+              />
+              <p className="text-xs text-muted-foreground">
+                Comma-separated model IDs. Used when the provider does not expose a /models
+                endpoint.
+              </p>
             </div>
 
             <div className="grid gap-2">

@@ -19,6 +19,7 @@ export type ProviderInput = {
   baseUrl: string;
   apiKey: string;
   connectionMode: ConnectionMode;
+  models?: string;
 };
 
 export type FetchModelsResult = {

@@ -11,6 +11,7 @@ export type StoredProvider = {
   apiKey: string;
   isDefault: boolean;
   connectionMode: ConnectionMode;
+  models?: string[];
 };
 
 export type StoredModelSelection = {
@@ -110,6 +111,10 @@ function normalizeStoredProvider(value: unknown): StoredProvider | null {
       ? candidate.connectionMode
       : "direct";
 
+  const models = Array.isArray(candidate.models)
+    ? candidate.models.filter((item): item is string => typeof item === "string")
+    : undefined;
+
   return {
     id: candidate.id,
     name: candidate.name,
@@ -118,6 +123,7 @@ function normalizeStoredProvider(value: unknown): StoredProvider | null {
     apiKey: candidate.apiKey,
     isDefault: typeof candidate.isDefault === "boolean" ? candidate.isDefault : false,
     connectionMode,
+    models,
   };
 }
 
@@ -139,6 +145,7 @@ export function toStoredProvider(provider: {
   apiKey: string;
   isDefault: boolean;
   connectionMode: ConnectionMode;
+  models?: string[];
 }): StoredProvider {
   return {
     id: provider.id,
@@ -148,6 +155,7 @@ export function toStoredProvider(provider: {
     apiKey: provider.apiKey,
     isDefault: provider.isDefault,
     connectionMode: provider.connectionMode,
+    models: provider.models,
   };
 }
 

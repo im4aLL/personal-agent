@@ -283,11 +283,10 @@ export function extractTextDelta(data: string): string | undefined {
   return parsed.textDelta;
 }
 
-async function fetchChatCompletions(
+function buildChatRequest(
   model: LanguageModel,
   messages: CoreMessage[],
-  abortSignal?: AbortSignal,
-): Promise<Response> {
+): { url: string; init: RequestInit } {
   const url = `${model.baseURL.replace(/\/$/, "")}/chat/completions`;
   const body = {
     model: model.modelId,
@@ -295,30 +294,68 @@ async function fetchChatCompletions(
     stream: true,
   };
 
-  const init: RequestInit = {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${model.apiKey}`,
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (model.apiKey) {
+    headers.Authorization = `Bearer ${model.apiKey}`;
+  }
+
+  return {
+    url,
+    init: {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-    signal: abortSignal,
+  };
+}
+
+function parseApiErrorText(bodyText: string): string {
+  try {
+    const parsed = JSON.parse(bodyText) as unknown;
+    if (parsed && typeof parsed === "object") {
+      const errorObject = (parsed as Record<string, unknown>).error;
+      if (errorObject && typeof errorObject === "object") {
+        const message = (errorObject as Record<string, unknown>).message;
+        if (typeof message === "string") {
+          return message;
+        }
+      }
+    }
+  } catch {
+    // Ignore; use raw body.
+  }
+
+  const trimmed = bodyText.trim();
+  return trimmed.length > 0 && trimmed.length < 200 ? trimmed : bodyText.slice(0, 200);
+}
+
+async function fetchChatCompletions(
+  model: LanguageModel,
+  messages: CoreMessage[],
+  abortSignal?: AbortSignal,
+): Promise<Response> {
+  const { url, init } = buildChatRequest(model, messages);
+  const requestInit = { ...init, signal: abortSignal };
+
+  const providerEndpoint: ProviderEndpoint = {
+    id: "",
+    baseUrl: model.baseURL,
+    apiKey: model.apiKey,
+    connectionMode: "proxy",
   };
 
   if (model.connectionMode === "proxy") {
-    return proxyFetch(
-      {
-        id: "",
-        baseUrl: model.baseURL,
-        apiKey: model.apiKey,
-        connectionMode: "proxy",
-      },
-      url,
-      init,
-    );
+    return proxyFetch(providerEndpoint, url, requestInit);
   }
 
-  return fetch(url, init);
+  try {
+    return await fetch(url, requestInit);
+  } catch {
+    return proxyFetch(providerEndpoint, url, requestInit);
+  }
 }
 
 export async function streamText(options: {
@@ -329,7 +366,14 @@ export async function streamText(options: {
   const response = await fetchChatCompletions(options.model, options.messages, options.abortSignal);
 
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    let bodyText = "";
+    try {
+      bodyText = await response.text();
+    } catch {
+      // Ignore; body not available.
+    }
+    const detail = parseApiErrorText(bodyText);
+    throw new Error(detail || `HTTP ${response.status}: ${response.statusText}`);
   }
 
   if (!response.body) {
