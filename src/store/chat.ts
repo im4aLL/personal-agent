@@ -48,7 +48,7 @@ export type ChatState = {
 export const PROVIDER_PRESETS: ProviderInput[] = [
   {
     label: "Opencode Go",
-    baseUrl: "https://api.opencode.ai",
+    baseUrl: "https://opencode.ai/zen/go/v1",
     apiKey: "",
     connectionMode: "direct",
   },

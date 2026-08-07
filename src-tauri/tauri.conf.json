@@ -17,7 +17,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self'; connect-src 'self' http://localhost:* https://api.opencode.ai https://api.openai.com https://api.deepseek.com ws://localhost:*; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self';"
+      "csp": "default-src 'self'; connect-src 'self' http: https: ws://localhost:*; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self';"
     }
   },
   "bundle": {

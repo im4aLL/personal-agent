@@ -188,8 +188,10 @@ async function proxyRequest(request: ProxyRequest): Promise<ProxyResponse> {
 function parseJson(value: string): unknown {
   try {
     return JSON.parse(value) as unknown;
-  } catch {
-    return null;
+  } catch (error) {
+    throw new Error(
+      `Invalid JSON response: ${error instanceof Error ? error.message : "Unknown error"}`,
+    );
   }
 }
 
@@ -200,29 +202,68 @@ function normalizeModels(data: unknown): ModelInfo[] {
 
   const candidate = data as Record<string, unknown>;
 
+  const error = detectApiError(candidate);
+  if (error) {
+    throw new Error(error);
+  }
+
   if (Array.isArray(candidate.data)) {
-    return candidate.data
-      .filter(isModelLike)
-      .map((item) => ({
-        id: item.id ?? "",
-        name: item.name ?? item.id ?? "",
-      }))
-      .filter((item) => item.id);
+    const models = candidate.data
+      .map(normalizeModelItem)
+      .filter((item): item is ModelInfo => item !== null);
+    if (models.length > 0) {
+      return models;
+    }
   }
 
   if (Array.isArray(candidate.models)) {
-    return candidate.models
-      .filter(isModelLike)
-      .map((item) => {
-        const id = item.name ?? item.id ?? item.model ?? "";
-        return { id, name: id };
-      })
-      .filter((item) => item.id);
+    const models = candidate.models
+      .map(normalizeModelItem)
+      .filter((item): item is ModelInfo => item !== null);
+    if (models.length > 0) {
+      return models;
+    }
+  }
+
+  if (Array.isArray(data)) {
+    return data.map(normalizeModelItem).filter((item): item is ModelInfo => item !== null);
   }
 
   return [];
 }
 
-function isModelLike(value: unknown): value is { id?: string; name?: string; model?: string } {
-  return value !== null && typeof value === "object";
+function detectApiError(data: Record<string, unknown>): string | null {
+  if (typeof data.error === "string") {
+    return data.error;
+  }
+
+  if (data.error && typeof data.error === "object") {
+    const errorObject = data.error as Record<string, unknown>;
+    if (typeof errorObject.message === "string") {
+      return errorObject.message;
+    }
+  }
+
+  return null;
+}
+
+function normalizeModelItem(item: unknown): ModelInfo | null {
+  if (typeof item === "string" && item) {
+    return { id: item, name: item };
+  }
+
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  const model = item as { id?: unknown; name?: unknown; model?: unknown };
+  const rawId = model.id ?? model.model ?? "";
+  const id = typeof rawId === "string" ? rawId : String(rawId);
+  if (!id) {
+    return null;
+  }
+
+  const rawName = model.name ?? id;
+  const name = typeof rawName === "string" ? rawName : String(rawName);
+  return { id, name };
 }
