@@ -4,6 +4,7 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
+import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { Button } from "#components/ui/button";
 import { cn } from "#lib/utils";
@@ -73,6 +74,7 @@ export function Markdown({ children, className }: MarkdownProps) {
       )}
     >
       <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight]}
         components={{
           pre({ children }) {
