@@ -62,7 +62,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs defaultValue="providers">
-          <TabsList>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="providers">Providers</TabsTrigger>
             <TabsTrigger value="appearance">Appearance</TabsTrigger>
             <TabsTrigger value="data">Data</TabsTrigger>

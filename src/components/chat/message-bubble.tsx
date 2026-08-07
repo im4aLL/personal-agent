@@ -50,6 +50,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </Markdown>
         </div>
 
+        {!isUser && message.model && (
+          <p className="text-xs text-muted-foreground">
+            {message.model.providerName} / {message.model.modelName}
+            {message.thinkingLevel && message.thinkingLevel !== "off"
+              ? ` - Thinking: ${message.thinkingLevel}`
+              : ""}
+          </p>
+        )}
+
         <div
           className={cn(
             "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100",

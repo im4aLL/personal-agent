@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { MOCK_CONVERSATIONS } from "#lib/mock-data";
-import type { Conversation } from "#lib/types/chat";
+import type { Conversation, Message, MessageModelInfo } from "#lib/types/chat";
 
 export type ModelInfo = {
   id: string;
@@ -22,9 +22,12 @@ export type ChatState = {
   selectedConversationId: string | null;
   selectedModel: { providerId: string; modelId: string };
   providers: ProviderInfo[];
+  thinkingLevel: string;
   selectConversation: (id: string | null) => void;
   setSelectedModel: (providerId: string, modelId: string) => void;
   setConversations: (conversations: Conversation[]) => void;
+  setThinkingLevel: (level: string) => void;
+  sendMessage: (content: string) => void;
 };
 
 export const MOCK_PROVIDERS: ProviderInfo[] = [
@@ -70,6 +73,13 @@ export const DEFAULT_MODEL = {
   modelId: "openai/gpt-4o",
 };
 
+const DEFAULT_MESSAGE_MODEL: MessageModelInfo = {
+  providerId: "opencode-go",
+  providerName: "Opencode Go",
+  modelId: "openai/gpt-4o",
+  modelName: "GPT-4o",
+};
+
 const CONVERSATIONS_STORAGE_KEY = "personal-agent-conversations";
 
 function loadConversations(): Conversation[] {
@@ -87,6 +97,10 @@ function loadConversations(): Conversation[] {
       updatedAt: new Date((item as Conversation).updatedAt),
       messages: ((item as Conversation).messages ?? []).map((message) => ({
         ...message,
+        model:
+          message.role === "assistant" && !message.model ? DEFAULT_MESSAGE_MODEL : message.model,
+        thinkingLevel:
+          message.role === "assistant" && !message.thinkingLevel ? "off" : message.thinkingLevel,
         createdAt: new Date(message.createdAt),
         editedAt: message.editedAt ? new Date(message.editedAt) : undefined,
       })),
@@ -105,14 +119,68 @@ function saveConversations(conversations: Conversation[]) {
   }
 }
 
-export const useChatStore = create<ChatState>((set) => ({
+function createMessageId(): string {
+  return `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getSelectedModelInfo(state: ChatState): MessageModelInfo {
+  const provider = state.providers.find((item) => item.id === state.selectedModel.providerId);
+  const model = provider?.models.find((item) => item.id === state.selectedModel.modelId);
+  return {
+    providerId: state.selectedModel.providerId,
+    providerName: provider?.label ?? state.selectedModel.providerId,
+    modelId: state.selectedModel.modelId,
+    modelName: model?.name ?? state.selectedModel.modelId,
+  };
+}
+
+export const useChatStore = create<ChatState>((set, get) => ({
   conversations: loadConversations(),
   selectedConversationId: null,
   selectedModel: DEFAULT_MODEL,
   providers: MOCK_PROVIDERS,
+  thinkingLevel: "off",
   selectConversation: (id) => set({ selectedConversationId: id }),
   setSelectedModel: (providerId, modelId) => set({ selectedModel: { providerId, modelId } }),
   setConversations: (conversations) => set({ conversations }),
+  setThinkingLevel: (level) => set({ thinkingLevel: level }),
+  sendMessage: (content) => {
+    const state = get();
+    const conversationId = state.selectedConversationId;
+    if (!conversationId) return;
+
+    const conversation = state.conversations.find((item) => item.id === conversationId);
+    if (!conversation) return;
+
+    const now = new Date();
+    const modelInfo = getSelectedModelInfo(state);
+    const userMessage: Message = {
+      id: createMessageId(),
+      role: "user",
+      content,
+      createdAt: now,
+    };
+    const assistantMessage: Message = {
+      id: createMessageId(),
+      role: "assistant",
+      content: `Mock response using ${modelInfo.providerName} / ${modelInfo.modelName} (thinking: ${state.thinkingLevel}).`,
+      createdAt: new Date(now.getTime() + 1),
+      model: modelInfo,
+      thinkingLevel: state.thinkingLevel,
+    };
+
+    const updatedConversation: Conversation = {
+      ...conversation,
+      messages: [...conversation.messages, userMessage, assistantMessage],
+      updatedAt: now,
+    };
+
+    set({
+      conversations: state.conversations.map((item) =>
+        item.id === conversationId ? updatedConversation : item,
+      ),
+    });
+  },
 }));
 
 saveConversations(useChatStore.getState().conversations);

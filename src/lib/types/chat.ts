@@ -7,6 +7,13 @@ export type ThinkingBlock = {
   isCollapsed?: boolean;
 };
 
+export type MessageModelInfo = {
+  providerId: string;
+  providerName: string;
+  modelId: string;
+  modelName: string;
+};
+
 export type Message = {
   id: string;
   role: MessageRole;
@@ -15,6 +22,8 @@ export type Message = {
   status?: MessageStatus;
   editedAt?: Date;
   createdAt: Date;
+  model?: MessageModelInfo;
+  thinkingLevel?: string;
 };
 
 export type Conversation = {

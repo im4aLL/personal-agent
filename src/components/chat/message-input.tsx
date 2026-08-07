@@ -73,7 +73,8 @@ function ModelSelector() {
 }
 
 function ThinkingSelector() {
-  const [mode, setMode] = useState("off");
+  const thinkingLevel = useChatStore((state) => state.thinkingLevel);
+  const setThinkingLevel = useChatStore((state) => state.setThinkingLevel);
 
   return (
     <DropdownMenu>
@@ -86,9 +87,9 @@ function ThinkingSelector() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
         <DropdownMenuRadioGroup
-          value={mode}
+          value={thinkingLevel}
           onValueChange={(value) => {
-            setMode(value);
+            setThinkingLevel(value);
             if (value !== "off") {
               toast("Coming soon", {
                 description: "Thinking mode is not implemented yet.",
@@ -110,13 +111,15 @@ function ThinkingSelector() {
 export function MessageInput() {
   const [value, setValue] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const sendMessage = useChatStore((state) => state.sendMessage);
 
   function handleSend() {
-    if (!value.trim()) return;
+    const trimmed = value.trim();
+    if (!trimmed) return;
     setIsGenerating(true);
-    toast("Coming soon", {
-      description: "Send is not implemented yet.",
-    });
+    sendMessage(trimmed);
+    setValue("");
+    setIsGenerating(false);
   }
 
   function handleStop() {
