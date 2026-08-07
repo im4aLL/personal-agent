@@ -1,0 +1,71 @@
+plan-build-review:
+  description: "Plan, implement, and review — the standard development cycle"
+  steps:
+    - agent: planner
+      prompt: "Plan the implementation for: $INPUT"
+    - agent: builder
+      prompt: "Implement the following plan:\n\n$INPUT"
+    - agent: reviewer
+      prompt: "Review this implementation for bugs, style, and correctness:\n\n$INPUT"
+
+plan-build:
+  description: "Plan then build — fast two-step implementation without review"
+  steps:
+    - agent: planner
+      prompt: "Plan the implementation for: $INPUT"
+    - agent: builder
+      prompt: "Based on this plan, implement:\n\n$INPUT"
+
+scout-flow:
+  description: "Triple-scout deep recon — explore, validate, verify"
+  steps:
+    - agent: scout
+      prompt: "Explore the codebase and investigate: $INPUT\n\nReport your findings with structure, key files, and patterns."
+    - agent: scout
+      prompt: "Validate and cross-check the following analysis. Look for anything missed, incorrect, or incomplete:\n\n$INPUT\n\nOriginal request: $ORIGINAL"
+    - agent: scout
+      prompt: "Final review pass. Verify the analysis below is accurate and complete. Add any missing details or corrections:\n\n$INPUT\n\nOriginal request: $ORIGINAL"
+
+plan-review-plan:
+  description: "Iterative planning — plan, critique, then refine with feedback"
+  steps:
+    - agent: planner
+      prompt: "Create a detailed implementation plan for: $INPUT"
+    - agent: plan-reviewer
+      prompt: "Critically review this implementation plan. Challenge assumptions, find gaps, and suggest improvements:\n\n$INPUT\n\nOriginal request: $ORIGINAL"
+    - agent: planner
+      prompt: "Revise and improve your implementation plan based on this critique. Address every issue raised and incorporate the recommendations:\n\nOriginal request: $ORIGINAL\n\nCritique:\n$INPUT"
+
+full-review:
+  description: "End-to-end pipeline — scout, plan, build, and review"
+  steps:
+    - agent: scout
+      prompt: "Explore the codebase and identify: $INPUT"
+    - agent: planner
+      prompt: "Based on this analysis, create a plan:\n\n$INPUT"
+    - agent: builder
+      prompt: "Implement this plan:\n\n$INPUT"
+    - agent: reviewer
+      prompt: "Review this implementation:\n\n$INPUT"
+
+ticket-pipeline:
+  description: "Take a single ticket (e.g. from the to-tickets skill) from scout to reviewed implementation with tests"
+  steps:
+    - agent: scout
+      prompt: "Explore the codebase for everything relevant to this ticket: $INPUT"
+    - agent: builder
+      prompt: "Implement this ticket:\n\n$INPUT\n\nCodebase context:\n$ORIGINAL"
+    - agent: tester
+      prompt: "Write or update tests covering this implementation:\n\n$INPUT"
+    - agent: reviewer
+      prompt: "Review this implementation and its tests for bugs, style, and correctness:\n\n$INPUT"
+
+bug-fix:
+  description: "Triage a bug report to root cause, then fix and test it"
+  steps:
+    - agent: triage
+      prompt: "Investigate this bug report and find the root cause and a minimal reproduction: $INPUT"
+    - agent: builder
+      prompt: "Fix the root cause identified below:\n\n$INPUT\n\nOriginal report:\n$ORIGINAL"
+    - agent: tester
+      prompt: "Write a regression test for this fix:\n\n$INPUT"

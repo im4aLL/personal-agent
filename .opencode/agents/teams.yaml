@@ -1,0 +1,34 @@
+full:
+  - scout
+  - planner
+  - builder
+  - tester
+  - reviewer
+  - documenter
+  - security
+
+plan-build:
+  - planner
+  - builder
+  - reviewer
+
+info:
+  - scout
+  - documenter
+  - reviewer
+
+frontend:
+  - planner
+  - builder
+  - browser
+
+quality:
+  - tester
+  - reviewer
+  - security
+  - auditor
+
+incident:
+  - triage
+  - builder
+  - tester
