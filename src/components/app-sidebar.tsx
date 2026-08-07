@@ -1,10 +1,19 @@
 "use client";
 
-import { MessageSquare, Pencil, Plus, Search, Settings, Trash2 } from "lucide-react";
+import {
+  MessageSquareIcon,
+  PencilIcon,
+  PlusIcon,
+  SearchIcon,
+  SettingsIcon,
+  Trash2Icon,
+} from "lucide-react";
 import { useMemo, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "#components/ui/button";
+import type { Conversation } from "#lib/types/chat";
+import { useChatStore } from "#store/chat";
 import { ThemeToggle } from "./theme-toggle";
 import {
   Sidebar,
@@ -18,29 +27,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "./ui/sidebar";
-
-type Conversation = {
-  id: string;
-  title: string;
-  updatedAt: Date;
-};
-
-const MOCK_CONVERSATIONS: Conversation[] = [
-  { id: "1", title: "Trip planning ideas", updatedAt: new Date() },
-  { id: "2", title: "Recipe for dinner", updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 3) },
-  { id: "3", title: "React patterns", updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 26) },
-  { id: "4", title: "Meeting notes", updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 50) },
-  {
-    id: "5",
-    title: "Book recommendations",
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5),
-  },
-  {
-    id: "6",
-    title: "Old project ideas",
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30),
-  },
-];
 
 function startOfDay(date: Date) {
   const d = new Date(date);
@@ -56,7 +42,7 @@ function groupConversations(conversations: Conversation[]) {
   const now = new Date();
   const sorted = [...conversations].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
 
-  const groups = new Map<string, Conversation[]>([
+  const groups = new Map<string, typeof conversations>([
     ["Today", []],
     ["Yesterday", []],
     ["Previous 7 days", []],
@@ -93,24 +79,26 @@ function handleDelete(_id: string) {
 
 export function AppSidebar() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const conversations = useChatStore((state) => state.conversations);
+  const selectedConversationId = useChatStore((state) => state.selectedConversationId);
+  const selectConversation = useChatStore((state) => state.selectConversation);
 
   const filteredGroups = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    const conversations = query
-      ? MOCK_CONVERSATIONS.filter((conversation) =>
-          conversation.title.toLowerCase().includes(query),
-        )
-      : MOCK_CONVERSATIONS;
-    return groupConversations(conversations);
-  }, [searchQuery]);
+    const filtered = query
+      ? conversations.filter((conversation) => conversation.title.toLowerCase().includes(query))
+      : conversations;
+    return groupConversations(filtered);
+  }, [searchQuery, conversations]);
 
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
         <div className="px-2 group-data-[collapsible=icon]:hidden">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+            <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             <SidebarInput
               placeholder="Search conversations..."
               value={searchQuery}
@@ -126,21 +114,29 @@ export function AppSidebar() {
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton tooltip="New Chat" onClick={handleNewChat}>
-                <Plus className="size-4" />
+                <PlusIcon className="size-4" />
                 <span>New Chat</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
 
-        {filteredGroups.map(([label, conversations]) => (
+        {filteredGroups.map(([label, items]) => (
           <SidebarGroup key={label} className="py-1">
             <SidebarGroupLabel>{label}</SidebarGroupLabel>
             <SidebarMenu>
-              {conversations.map((conversation) => (
+              {items.map((conversation) => (
                 <SidebarMenuItem key={conversation.id}>
-                  <SidebarMenuButton tooltip={conversation.title} className="pr-14">
-                    <MessageSquare className="size-4" />
+                  <SidebarMenuButton
+                    tooltip={conversation.title}
+                    isActive={selectedConversationId === conversation.id}
+                    onClick={() => {
+                      selectConversation(conversation.id);
+                      navigate("/");
+                    }}
+                    className="pr-14"
+                  >
+                    <MessageSquareIcon className="size-4" />
                     <span>{conversation.title}</span>
                   </SidebarMenuButton>
                   <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:opacity-100 focus-within:opacity-100 group-data-[collapsible=icon]:hidden">
@@ -153,7 +149,7 @@ export function AppSidebar() {
                         handleRename(conversation.id);
                       }}
                     >
-                      <Pencil className="size-3" />
+                      <PencilIcon className="size-3" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -165,7 +161,7 @@ export function AppSidebar() {
                         handleDelete(conversation.id);
                       }}
                     >
-                      <Trash2 className="size-3" />
+                      <Trash2Icon className="size-3" />
                     </Button>
                   </div>
                 </SidebarMenuItem>
@@ -191,7 +187,7 @@ export function AppSidebar() {
                 asChild
               >
                 <Link to="/settings">
-                  <Settings className="size-4" />
+                  <SettingsIcon className="size-4" />
                   <span>Settings</span>
                 </Link>
               </SidebarMenuButton>

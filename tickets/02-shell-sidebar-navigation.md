@@ -4,13 +4,13 @@
 
 **Blocked by:** #1 — Bootstrap scaffold and tooling
 
-**Status:** Ready For Dev
+**Status:** Done
 
-- [ ] Build layout component: sidebar + main area shell
-- [ ] Build app-sidebar with conversation list, search input, new-chat button, date grouping, hover actions (rename/delete), footer (settings, theme)
-- [ ] Create theme-provider (React context, light/dark/system, mirrors personal-os pattern) and theme-toggle component
-- [ ] Wire hash router: `/` -> chat page, `/settings` -> settings page
-- [ ] Navigation between pages works
-- [ ] Theme toggle switches and persists in localStorage
-- [ ] No-op handlers for rename, delete, new chat show sonner "Coming soon" toast
-- [ ] Verify: sidebar renders with mock data placeholders, navigation works, theme toggles
+- [x] Build layout component: sidebar + main area shell
+- [x] Build app-sidebar with conversation list, search input, new-chat button, date grouping, hover actions (rename/delete), footer (settings, theme)
+- [x] Create theme-provider (React context, light/dark/system, mirrors personal-os pattern) and theme-toggle component
+- [x] Wire hash router: `/` -> chat page, `/settings` -> settings page
+- [x] Navigation between pages works
+- [x] Theme toggle switches and persists in localStorage
+- [x] No-op handlers for rename, delete, new chat show sonner "Coming soon" toast
+- [x] Verify: sidebar renders with mock data placeholders, navigation works, theme toggles
