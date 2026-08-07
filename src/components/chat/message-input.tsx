@@ -8,7 +8,7 @@ import {
   PaperclipIcon,
   SquareIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "#components/ui/button";
 import {
@@ -189,6 +189,11 @@ function ThinkingSelector() {
 export function MessageInput() {
   const [value, setValue] = useState("");
   const { sendMessage, stop, isGenerating, canSend } = useChat();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, []);
 
   function handleSend() {
     const trimmed = value.trim();
@@ -228,6 +233,7 @@ export function MessageInput() {
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={handleKeyDown}
             rows={1}
+            ref={textareaRef}
             className="max-h-60 min-h-12 resize-none border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
             disabled={isGenerating}
             aria-label="Message input"

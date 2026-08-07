@@ -28,6 +28,8 @@ export type ProviderInfo = {
   modelsError?: string | null;
 };
 
+export const DEFAULT_CONVERSATION_TITLE = "New chat";
+
 export type ChatState = {
   conversations: Conversation[];
   selectedConversationId: string | null;
@@ -38,6 +40,10 @@ export type ChatState = {
   setSelectedModel: (providerId: string, modelId: string) => void;
   setConversations: (conversations: Conversation[]) => void;
   setThinkingLevel: (level: string) => void;
+  createConversation: (selectAfterCreate?: boolean) => string;
+  renameConversation: (id: string, title: string) => void;
+  deleteConversation: (id: string) => void;
+  setConversationTitle: (id: string, title: string) => void;
   addMessage: (conversationId: string, message: Message) => void;
   appendMessageContent: (conversationId: string, messageId: string, delta: string) => void;
   setMessageStatus: (conversationId: string, messageId: string, status: Message["status"]) => void;
@@ -153,6 +159,10 @@ function loadConversations(): Conversation[] {
   return MOCK_CONVERSATIONS;
 }
 
+export function createConversationId(): string {
+  return `conv-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function createMessageId(): string {
   return `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -211,6 +221,71 @@ export const useChatStore = create<ChatState>((set, get) => ({
   thinkingLevel: "off",
 
   selectConversation: (id) => set({ selectedConversationId: id }),
+
+  createConversation: (selectAfterCreate = false) => {
+    const id = createConversationId();
+    const newConversation: Conversation = {
+      id,
+      title: DEFAULT_CONVERSATION_TITLE,
+      messages: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    set((state) => ({
+      conversations: [newConversation, ...state.conversations],
+      selectedConversationId: selectAfterCreate ? id : state.selectedConversationId,
+    }));
+
+    return id;
+  },
+
+  renameConversation: (id, title) => {
+    const trimmed = title.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    set((state) => ({
+      conversations: updateConversation(state, id, (conversation) => ({
+        ...conversation,
+        title: trimmed,
+      })),
+    }));
+  },
+
+  deleteConversation: (id) => {
+    set((state) => {
+      const nextConversations = state.conversations.filter(
+        (conversation) => conversation.id !== id,
+      );
+      let nextSelectedId = state.selectedConversationId;
+
+      if (state.selectedConversationId === id && nextConversations.length > 0) {
+        const mostRecent = nextConversations.reduce((latest, current) =>
+          current.updatedAt.getTime() > latest.updatedAt.getTime() ? current : latest,
+        );
+        nextSelectedId = mostRecent.id;
+      } else if (state.selectedConversationId === id) {
+        nextSelectedId = null;
+      }
+
+      return {
+        conversations: nextConversations,
+        selectedConversationId: nextSelectedId,
+      };
+    });
+  },
+
+  setConversationTitle: (id, title) => {
+    const trimmed = title.trim();
+    set((state) => ({
+      conversations: updateConversation(state, id, (conversation) => ({
+        ...conversation,
+        title: trimmed || conversation.title,
+      })),
+    }));
+  },
 
   setSelectedModel: (providerId, modelId) => {
     set({ selectedModel: { providerId, modelId } });

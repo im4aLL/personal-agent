@@ -8,10 +8,18 @@ import {
   SettingsIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { Button } from "#components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "#components/ui/dialog";
+import { Input } from "#components/ui/input";
 import type { Conversation } from "#lib/types/chat";
 import { useChatStore } from "#store/chat";
 import { ThemeToggle } from "./theme-toggle";
@@ -65,25 +73,55 @@ function groupConversations(conversations: Conversation[]) {
   return Array.from(groups.entries()).filter(([, items]) => items.length > 0);
 }
 
-function handleNewChat() {
-  toast("Coming soon");
-}
-
-function handleRename(_id: string) {
-  toast("Coming soon");
-}
-
-function handleDelete(_id: string) {
-  toast("Coming soon");
+function DeleteConversationDialog({
+  conversation,
+  isOpen,
+  onClose,
+  onConfirm,
+}: {
+  conversation: Conversation | null;
+  isOpen: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete conversation</DialogTitle>
+          <DialogDescription>
+            Are you sure you want to delete "{conversation?.title ?? ""}"? This action cannot be
+            undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={onConfirm}>
+            Delete
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
   const conversations = useChatStore((state) => state.conversations);
   const selectedConversationId = useChatStore((state) => state.selectedConversationId);
   const selectConversation = useChatStore((state) => state.selectConversation);
+  const createConversation = useChatStore((state) => state.createConversation);
+  const renameConversation = useChatStore((state) => state.renameConversation);
+  const deleteConversation = useChatStore((state) => state.deleteConversation);
 
   const filteredGroups = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -92,6 +130,41 @@ export function AppSidebar() {
       : conversations;
     return groupConversations(filtered);
   }, [searchQuery, conversations]);
+
+  function handleNewChat() {
+    createConversation(true);
+    navigate("/");
+  }
+
+  function startRename(conversation: Conversation) {
+    setEditingId(conversation.id);
+    setEditDraft(conversation.title);
+    requestAnimationFrame(() => {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    });
+  }
+
+  function commitRename(id: string) {
+    const trimmed = editDraft.trim();
+    if (trimmed) {
+      renameConversation(id, trimmed);
+    }
+    setEditingId(null);
+    setEditDraft("");
+  }
+
+  function cancelRename() {
+    setEditingId(null);
+    setEditDraft("");
+  }
+
+  function handleDeleteConfirm() {
+    if (deleteTarget) {
+      deleteConversation(deleteTarget.id);
+    }
+    setDeleteTarget(null);
+  }
 
   return (
     <Sidebar collapsible="icon">
@@ -125,47 +198,73 @@ export function AppSidebar() {
           <SidebarGroup key={label} className="py-1">
             <SidebarGroupLabel>{label}</SidebarGroupLabel>
             <SidebarMenu>
-              {items.map((conversation) => (
-                <SidebarMenuItem key={conversation.id}>
-                  <SidebarMenuButton
-                    tooltip={conversation.title}
-                    isActive={selectedConversationId === conversation.id}
-                    onClick={() => {
-                      selectConversation(conversation.id);
-                      navigate("/");
-                    }}
-                    className="pr-14"
-                  >
-                    <MessageSquareIcon className="size-4" />
-                    <span>{conversation.title}</span>
-                  </SidebarMenuButton>
-                  <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:opacity-100 focus-within:opacity-100 group-data-[collapsible=icon]:hidden">
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={`Rename ${conversation.title}`}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleRename(conversation.id);
-                      }}
-                    >
-                      <PencilIcon className="size-3" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label={`Delete ${conversation.title}`}
-                      className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleDelete(conversation.id);
-                      }}
-                    >
-                      <Trash2Icon className="size-3" />
-                    </Button>
-                  </div>
-                </SidebarMenuItem>
-              ))}
+              {items.map((conversation) => {
+                const isEditing = editingId === conversation.id;
+
+                return (
+                  <SidebarMenuItem key={conversation.id}>
+                    {isEditing ? (
+                      <div className="flex flex-1 items-center gap-2 px-2 py-1.5">
+                        <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
+                        <Input
+                          ref={editInputRef}
+                          value={editDraft}
+                          onChange={(event) => setEditDraft(event.target.value)}
+                          onBlur={() => commitRename(conversation.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              commitRename(conversation.id);
+                            } else if (event.key === "Escape") {
+                              cancelRename();
+                            }
+                          }}
+                          className="h-7 min-w-0 flex-1 px-2 py-1 text-sm"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <SidebarMenuButton
+                          tooltip={conversation.title}
+                          isActive={selectedConversationId === conversation.id}
+                          onClick={() => {
+                            selectConversation(conversation.id);
+                            navigate("/");
+                          }}
+                          className="pr-14"
+                        >
+                          <MessageSquareIcon className="size-4" />
+                          <span>{conversation.title}</span>
+                        </SidebarMenuButton>
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:opacity-100 focus-within:opacity-100 group-data-[collapsible=icon]:hidden">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Rename ${conversation.title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              startRename(conversation);
+                            }}
+                          >
+                            <PencilIcon className="size-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Delete ${conversation.title}`}
+                            className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setDeleteTarget(conversation);
+                            }}
+                          >
+                            <Trash2Icon className="size-3" />
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </SidebarMenuItem>
+                );
+              })}
             </SidebarMenu>
           </SidebarGroup>
         ))}
@@ -196,6 +295,13 @@ export function AppSidebar() {
           <ThemeToggle />
         </div>
       </SidebarFooter>
+
+      <DeleteConversationDialog
+        conversation={deleteTarget}
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteConfirm}
+      />
     </Sidebar>
   );
 }

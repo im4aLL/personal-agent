@@ -4,14 +4,14 @@
 
 **Blocked by:** #6 - First real chat flow with send, stream, and stop
 
-**Status:** Ready For Dev
+**Status:** Done
 
-- [ ] Chat store: conversation actions (new, rename, delete) wired for real, replacing Phase 1 toasts
-- [ ] Delete confirmation dialog
-- [ ] Inline rename editing on conversation items
-- [ ] Auto-title via a short non-streaming `generateText` call using the conversation's provider/model, triggered after the first exchange completes
-- [ ] Fallback to "New chat" when auto-title fails
-- [ ] Date grouping in sidebar reflects real `updatedAt` values and updates after edits
-- [ ] Verify: create, rename, and delete conversations
-- [ ] Verify: auto-generated titles appear after first exchange
-- [ ] Verify: date grouping and ordering update after edits
+- [x] Chat store: conversation actions (new, rename, delete) wired for real, replacing Phase 1 toasts
+- [x] Delete confirmation dialog
+- [x] Inline rename editing on conversation items
+- [x] Auto-title via a short non-streaming `generateText` call using the conversation's provider/model, triggered after the first exchange completes
+- [x] Fallback to "New chat" when auto-title fails
+- [x] Date grouping in sidebar reflects real `updatedAt` values and updates after edits
+- [x] Verify: create, rename, and delete conversations
+- [x] Verify: auto-generated titles appear after first exchange
+- [x] Verify: date grouping and ordering update after edits

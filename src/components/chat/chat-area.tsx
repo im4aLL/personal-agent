@@ -22,7 +22,7 @@ export function ChatArea() {
           <MessageList conversation={selectedConversation} />
         </div>
       </div>
-      <MessageInput />
+      <MessageInput key={selectedConversation.id} />
     </div>
   );
 }

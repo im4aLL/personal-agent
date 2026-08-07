@@ -5,9 +5,11 @@ import { streamText } from "ai";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { proxyFetch } from "#lib/ai";
+import { generateConversationTitle } from "#lib/title";
 import type { Message, MessageModelInfo } from "#lib/types/chat";
 import {
   createMessageId,
+  DEFAULT_CONVERSATION_TITLE,
   getSelectedModelInfo,
   selectSelectedConversation,
   useChatStore,
@@ -36,6 +38,7 @@ export function useChat() {
   const appendMessageContent = useChatStore((state) => state.appendMessageContent);
   const setMessageStatus = useChatStore((state) => state.setMessageStatus);
   const setMessageError = useChatStore((state) => state.setMessageError);
+  const setConversationTitle = useChatStore((state) => state.setConversationTitle);
   const deleteMessage = useChatStore((state) => state.deleteMessage);
   const regenerateMessage = useChatStore((state) => state.regenerate);
   const editMessageInStore = useChatStore((state) => state.editMessage);
@@ -104,6 +107,34 @@ export function useChat() {
         }
 
         setMessageStatus(conversationId, assistantMessage.id, "sent");
+
+        const currentConversation = useChatStore
+          .getState()
+          .conversations.find((item) => item.id === conversationId);
+
+        if (
+          currentConversation &&
+          currentConversation.title === DEFAULT_CONVERSATION_TITLE &&
+          currentConversation.messages.length === 2 &&
+          currentConversation.messages[0]?.role === "user" &&
+          currentConversation.messages[1]?.id === assistantMessage.id
+        ) {
+          const firstUserMessage = currentConversation.messages[0].content;
+          const titleProvider = providers.find((provider) => provider.id === modelInfo.providerId);
+
+          if (titleProvider) {
+            try {
+              const title = await generateConversationTitle(
+                firstUserMessage,
+                titleProvider,
+                modelInfo.modelId,
+              );
+              setConversationTitle(conversationId, title);
+            } catch {
+              setConversationTitle(conversationId, DEFAULT_CONVERSATION_TITLE);
+            }
+          }
+        }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") {
           setMessageStatus(conversationId, assistantMessage.id, "sent");
@@ -129,17 +160,23 @@ export function useChat() {
       appendMessageContent,
       setMessageStatus,
       setMessageError,
+      setConversationTitle,
     ],
   );
 
   const sendMessage = useCallback(
     async (content: string) => {
-      if (!conversation || !activeProvider) {
+      if (!activeProvider) {
         return;
       }
 
       const trimmed = content.trim();
       if (!trimmed) {
+        return;
+      }
+
+      const currentConversation = selectSelectedConversation(useChatStore.getState());
+      if (!currentConversation) {
         return;
       }
 
@@ -150,11 +187,14 @@ export function useChat() {
         createdAt: new Date(),
       };
 
-      addMessage(conversation.id, userMessage);
+      addMessage(currentConversation.id, userMessage);
 
-      await streamAssistantResponse(conversation.id, [...conversation.messages, userMessage]);
+      await streamAssistantResponse(currentConversation.id, [
+        ...currentConversation.messages,
+        userMessage,
+      ]);
     },
-    [conversation, activeProvider, addMessage, streamAssistantResponse],
+    [activeProvider, addMessage, streamAssistantResponse],
   );
 
   const regenerate = useCallback(async () => {
