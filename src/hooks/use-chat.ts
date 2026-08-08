@@ -77,6 +77,9 @@ function buildUserContent(message: Message): UserContent {
   return parts;
 }
 
+const BASE_SYSTEM_PROMPT =
+  "You are an AI assistant in Personal Agent, a desktop app created by Hadi (https://github.com/im4aLL).";
+
 function systemPromptFromState(state: {
   activeInstructionId: string | null;
   activeSkillId: string | null;
@@ -85,7 +88,7 @@ function systemPromptFromState(state: {
   skills: Array<{ id: string; content?: string | null }>;
   customAgents: Array<{ id: string; content?: string | null }>;
 }): string | undefined {
-  const parts: string[] = [];
+  const parts: string[] = [BASE_SYSTEM_PROMPT];
 
   if (state.activeInstructionId) {
     const instruction = state.userInstructions.find((i) => i.id === state.activeInstructionId);
@@ -102,7 +105,7 @@ function systemPromptFromState(state: {
     if (agent?.content) parts.push(agent.content);
   }
 
-  return parts.length > 0 ? parts.join("\n\n") : undefined;
+  return parts.join("\n\n");
 }
 
 function buildCoreMessages(messages: Message[]) {

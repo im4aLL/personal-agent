@@ -272,7 +272,6 @@ export function AppSidebar() {
                 variant="ghost"
                 size="icon-xs"
                 aria-label={`Delete ${conversation.title}`}
-                className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                 onClick={(event) => {
                   event.stopPropagation();
                   setDeleteTarget(conversation);
@@ -443,7 +442,6 @@ export function AppSidebar() {
                             variant="ghost"
                             size="icon-xs"
                             aria-label={`Delete ${conversation.title}`}
-                            className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                             onClick={(event) => {
                               event.stopPropagation();
                               setDeleteTarget(conversation);
