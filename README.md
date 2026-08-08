@@ -1,53 +1,91 @@
 # Personal Agent
 
-A local-first AI chat desktop application built with Tauri, React, and TypeScript. Talk to any OpenAI-compatible API from your desktop with full control over your data.
+A local-first AI chat desktop application built with Tauri, React, and TypeScript. Talk to any OpenAI-compatible API from your desktop with full control over your data, instructions, and workflow.
 
-## Features
+## Why Personal Agent?
 
-- Chat with any OpenAI-compatible provider (OpenAI, Ollama, LM Studio, DeepSeek, Opencode Go, and more)
-- Provider management with connection testing and model discovery
-- Per-message retry on errors
-- Message editing and response regeneration
-- Conversational history with search (debounced)
-- Virtualized message list for smooth scrolling in long conversations
-- Streaming responses with stop support
-- Thinking / reasoning content display (collapsible)
-- Auto-generated conversation titles
-- Dark, light, and system theme support
-- Keyboard shortcuts: Enter to send, Shift+Enter for newline, Esc to stop
-- Offline detection with automatic reconnection
-- Stream-drop retry with exponential backoff
-- Credential-loss recovery: export provider settings without API keys
-- API keys masked in all UI; never logged
-- Dev-mode provider call logging (URL and model only, no keys)
+I use multiple AI subscriptions - Gemini, Opencode Go, and other OpenAI-compatible providers. I also run models locally via LM Studio and Ollama. For development, I use Pi and Opencode with those same subscriptions. But I wanted a separate chat interface for daily random things - brainstorming, quick questions, research, notes - without mixing into my dev tools. Over time, I kept running into the same frustrations:
 
-## Getting Started
+- **Scattered conversations.** I would ask questions across different platforms and forget where I asked what. There was no single place to find my conversation history.
+- **Lost data.** Responses, insights, and decisions would disappear into separate chat logs with no way to search or retrieve them later.
+- **No tagging or organization.** I could not tag a conversation, group related chats, or pin important ones. Everything was just a flat list of untitled chats.
+- **No formatting control.** Every platform forces its own style - emojis, formatting quirks, and output structures I did not ask for. I wanted my responses in a specific format, every time, without fighting the system.
+- **Generic outputs.** When I asked an LLM to plan something, it would give me a generic plan format instead of the structure I actually use. There was no way to enforce my own templates.
 
-### Prerequisites
+Personal Agent solves all of this:
 
-- [Node.js](https://nodejs.org/) 20+
-- [Rust](https://www.rust-lang.org/) (for Tauri native backend)
-- Platform-specific Tauri [prerequisites](https://v2.tauri.app/start/prerequisites/)
+- **Centralized storage.** All conversations live in one local database. Search across everything from a single place. Optionally sync to Turso for multi-device access.
+- **Custom instructions.** Define global instructions that get prepended to every conversation. No emojis, specific formatting rules, your preferred response structure - it just works.
+- **Skills.** Create reusable skill blocks (think: project-specific guidelines, coding conventions, domain knowledge) and activate them per conversation. The LLM follows your rules, not the other way around.
+- **Custom agents.** Combine instructions and skills into named agent profiles. Switch between them depending on what you are working on.
+- **Tagging and pinning.** Organize conversations with tags. Pin the ones that matter. Find what you need without scrolling through a list of "New Chat (47)".
+- **Multi-device.** Turso database sync means your conversations, agents, and instructions follow you across macOS and Windows devices.
 
-### Install
+## Screenshots
+
+![Chat interface](screenshots/chat.png)
+
+![Custom agent editor](screenshots/custom-agent.png)
+
+![Provider and agent settings](screenshots/settings.png)
+
+![Turso database configuration](screenshots/remote-db.png)
+
+## Installation
+
+Download the latest release for your platform from the [GitHub Releases](https://github.com/hadi/personal-agent/releases) page.
+
+- **macOS** - `.dmg` installer
+- **Windows** - `.msi` installer
+
+### Build from source
 
 ```bash
+# Prerequisites: Node.js 20+, Rust, and Tauri v2 system dependencies
+git clone https://github.com/hadi/personal-agent.git
+cd personal-agent
 npm install
+npm run tauri build
 ```
 
 ### Development
 
 ```bash
+npm install
 npm run tauri dev
 ```
 
-This starts the Vite dev server and opens the Tauri desktop window.
+## Features
 
-### Build
+### Chat
+- Chat with any OpenAI-compatible provider (OpenAI, Ollama, LM Studio, DeepSeek, Opencode Go, and more)
+- Streaming responses with stop support
+- Thinking / reasoning content display (collapsible)
+- Per-message retry on errors
+- Message editing and response regeneration
+- Auto-generated conversation titles
+- Conversation search with debounced input
+- Virtualized message list for smooth scrolling in long conversations
+- Tagging and pinning for conversation organization
+- Keyboard shortcuts: Enter to send, Shift+Enter for newline, Esc to stop
 
-```bash
-npm run tauri build
-```
+### Customization
+- **Custom instructions** - Global rules that apply to every message you send. Define your preferred format, tone, and constraints once.
+- **Skills** - Reusable knowledge blocks you can activate per conversation (coding conventions, project guidelines, domain-specific rules).
+- **Custom agents** - Combine instructions and skills into named profiles. Switch agents when switching contexts.
+
+### Data
+- Local-first storage with Turso (libsql) for optional cloud sync
+- Conversations, agents, skills, and instructions sync across devices
+- Offline detection with automatic reconnection
+- Settings export without API keys (provider labels, URLs, and model lists only)
+- API keys masked in all UI and never logged
+- Dev-mode provider call logging (URL and model only, no keys)
+
+### Other
+- Dark, light, and system theme support
+- Stream-drop retry with exponential backoff
+- Provider management with connection testing and model discovery
 
 ## Provider Setup
 
@@ -60,7 +98,7 @@ Opencode Go provides zen-compatible models via the go router.
 1. Install and start [Opencode](https://opencode.ai)
 2. In Personal Agent Settings > Providers, click "Opencode Go" under Quick Add
 3. The base URL is pre-filled: `https://opencode.ai/zen/go/v1`
-4. Leave the API key blank (Opencode Go doesn't require one)
+4. Leave the API key blank (Opencode Go does not require one)
 5. Click "Test connection" to verify, then "Add provider"
 
 ### OpenAI
@@ -109,19 +147,50 @@ Any service with an OpenAI-compatible `/v1/models` and `/v1/chat/completions` en
 
 1. In Settings > Providers, click "Add provider"
 2. Enter a label (any name), the base URL including `/v1`, and your API key
-3. Optionally enter comma-separated model IDs if the provider doesn't expose a `/models` endpoint
+3. Optionally enter comma-separated model IDs if the provider does not expose a `/models` endpoint
 4. Choose connection mode:
    - **Direct** - fetch from the browser (works for most providers)
    - **Proxy** - route through the Tauri Rust backend (use for CORS-restricted endpoints)
 
+## Custom Instructions, Skills, and Agents
+
+These features form the core of Personal Agent's customization system. They are stored in your Turso database (or locally) and can be managed from Settings.
+
+### Custom Instructions
+
+Custom instructions are global rules injected as system prompts into every conversation. Use them to enforce formatting preferences, tone, or constraints.
+
+Examples:
+- "Never use emojis in responses."
+- "Always format code blocks with the language tag."
+- "Respond in plain English without marketing fluff."
+
+### Skills
+
+Skills are reusable blocks of domain knowledge or guidelines you can activate per conversation. They are injected into the system prompt only when you activate them.
+
+Examples:
+- A skill with your project's coding conventions
+- A skill with your preferred meeting note format
+- A skill with rules for writing commit messages
+
+### Custom Agents
+
+Custom agents combine a system prompt with a description. Activate an agent to switch the AI's persona and behavior for a specific workflow.
+
+Examples:
+- A "Code Reviewer" agent that focuses on security and performance
+- A "Technical Writer" agent that produces documentation in your preferred style
+- A "DevOps" agent that knows your infrastructure setup
+
 ## Turso Database (optional)
 
-Connect to a [Turso](https://turso.tech) database for persistent conversation storage across sessions.
+Connect to a [Turso](https://turso.tech) database for persistent conversation storage and multi-device sync.
 
 1. Create a database at [turso.tech](https://turso.tech)
 2. Get your database URL (`libsql://...`) and auth token
 3. In Settings > Data, enter the URL and token, then click "Test Connection"
-4. Once connected, conversations are automatically persisted and loaded on startup
+4. Once connected, conversations, agents, skills, and instructions are automatically persisted and synced across devices
 
 ## Settings Export
 
@@ -131,15 +200,24 @@ To back up your provider configuration without exposing API keys:
 2. Click "Export" at the bottom
 3. A JSON file downloads with provider labels, base URLs, and model lists (no API keys)
 
-## Architecture
+## Technology Stack
 
-- **Frontend**: React 19 + TypeScript + Vite
-- **Desktop shell**: Tauri v2 (Rust backend)
-- **State management**: Zustand
-- **AI SDK**: Vercel AI SDK with OpenAI-compatible provider
-- **Styling**: Tailwind CSS v4 + shadcn/ui components
-- **Markdown**: react-markdown with GFM and syntax highlighting via highlight.js
-- **Database**: Turso (libsql) for optional cloud persistence; localStorage for provider config
+| Layer | Technology |
+|-------|------------|
+| Desktop shell | [Tauri v2](https://v2.tauri.app/) (Rust) |
+| Frontend | [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) |
+| Build tool | [Vite](https://vitejs.dev/) |
+| State management | [Zustand](https://zustand.docs.pmnd.rs/) |
+| AI SDK | [Vercel AI SDK](https://sdk.vercel.ai/) with OpenAI-compatible provider |
+| Styling | [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
+| Markdown | [react-markdown](https://github.com/remarkjs/react-markdown) with GFM + [highlight.js](https://highlightjs.org/) |
+| UI primitives | [Radix UI](https://www.radix-ui.com/) + [Base UI](https://base-ui.com/) |
+| Icons | [Lucide React](https://lucide.dev/) |
+| Database | [Turso](https://turso.tech/) (libsql) for optional cloud sync; localStorage for provider config |
+| Linting & formatting | [Biome](https://biomejs.dev/) |
+| Routing | [React Router v7](https://reactrouter.com/) |
+
+## Architecture
 
 ### Key files
 
@@ -147,11 +225,14 @@ To back up your provider configuration without exposing API keys:
 |------|---------|
 | `src/hooks/use-chat.ts` | Core chat logic: send, stream, retry, edit, regenerate |
 | `src/store/chat.ts` | Zustand store: conversations, providers, model selection |
+| `src/store/agents.ts` | Zustand store: instructions, skills, custom agents |
 | `src/lib/ai.ts` | AI SDK integration and Tauri proxy fetch |
 | `src/lib/providers.ts` | Provider model discovery and connection testing |
+| `src/lib/agent-repository.ts` | Agent/skill/instruction persistence layer |
 | `src/components/chat/message-list.tsx` | Virtualized message rendering |
 | `src/components/chat/message-input.tsx` | Input with Enter/Shift+Enter/Esc handling |
 | `src/components/settings/provider-form.tsx` | Provider add/edit form with validation |
+| `src/components/settings/agents-tab.tsx` | Custom instructions, skills, and agents management |
 | `src-tauri/src/proxy.rs` | Tauri proxy and streaming backend |
 
 ## License
