@@ -1,6 +1,13 @@
 "use client";
 
-import { DownloadIcon, PlusIcon, SparklesIcon } from "lucide-react";
+import {
+  DatabaseIcon,
+  DownloadIcon,
+  PaletteIcon,
+  PlusIcon,
+  ServerIcon,
+  SparklesIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { AppearanceTab } from "#components/settings/appearance-tab";
@@ -17,9 +24,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "#components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "#components/ui/tabs";
+import { cn } from "#lib/utils";
 import type { ConnectionMode } from "#lib/providers";
 import { PROVIDER_PRESETS, type ProviderInfo, useChatStore } from "#store/chat";
+
+type SettingsSection = "providers" | "appearance" | "data";
+
+const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "providers", label: "Providers", icon: ServerIcon },
+  { id: "appearance", label: "Appearance", icon: PaletteIcon },
+  { id: "data", label: "Data", icon: DatabaseIcon },
+];
 
 export default function SettingsPage() {
   const providers = useChatStore((state) => state.providers);
@@ -38,6 +53,7 @@ export default function SettingsPage() {
   const setProviderModelsEnabled = useChatStore((state) => state.setProviderModelsEnabled);
   const setAllModelsEnabled = useChatStore((state) => state.setAllModelsEnabled);
 
+  const [activeSection, setActiveSection] = useState<SettingsSection>("providers");
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null);
   const [deleteConfirmProvider, setDeleteConfirmProvider] = useState<ProviderInfo | null>(null);
@@ -132,113 +148,128 @@ export default function SettingsPage() {
 
   return (
     <div className="flex-1 overflow-auto p-6">
-      <div className="mx-auto max-w-3xl space-y-6">
+      <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold">Settings</h1>
           <p className="text-muted-foreground">Manage providers, appearance, and data.</p>
         </div>
 
-        <Tabs defaultValue="providers">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="providers">Providers</TabsTrigger>
-            <TabsTrigger value="appearance">Appearance</TabsTrigger>
-            <TabsTrigger value="data">Data</TabsTrigger>
-          </TabsList>
+        <div className="flex gap-6">
+          <nav className="flex w-48 shrink-0 flex-col gap-1">
+            {SECTIONS.map(({ id, label, icon: Icon }) => (
+              <Button
+                key={id}
+                variant="ghost"
+                className={cn(
+                  "justify-start gap-2",
+                  activeSection === id && "bg-accent text-accent-foreground",
+                )}
+                onClick={() => setActiveSection(id)}
+              >
+                <Icon className="size-4" />
+                {label}
+              </Button>
+            ))}
+          </nav>
 
-          <TabsContent value="providers" className="space-y-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between">
-                <div className="space-y-2">
-                  <CardTitle>Providers</CardTitle>
-                  <CardDescription>AI providers available for chat.</CardDescription>
-                </div>
-                <Button size="sm" onClick={handleAdd}>
-                  <PlusIcon className="size-4" />
-                  Add provider
-                </Button>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <SparklesIcon className="size-4" />
-                    Quick add
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    {PROVIDER_PRESETS.map((preset) => (
+          <div className="min-w-0 flex-1 space-y-4">
+            {activeSection === "providers" && (
+              <>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <div className="space-y-2">
+                      <CardTitle>Providers</CardTitle>
+                      <CardDescription>AI providers available for chat.</CardDescription>
+                    </div>
+                    <Button size="sm" onClick={handleAdd}>
+                      <PlusIcon className="size-4" />
+                      Add provider
+                    </Button>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <SparklesIcon className="size-4" />
+                        Quick add
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {PROVIDER_PRESETS.map((preset) => (
+                          <Button
+                            key={preset.label}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleAddPreset(preset)}
+                          >
+                            {preset.label}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <ProvidersList
+                      providers={providers}
+                      providerSyncEnabled={providerSyncEnabled}
+                      providerSyncUnlocked={providerSyncKey !== null}
+                      providerSyncStatus={providerSyncStatus}
+                      providerSyncPending={providerSyncPending}
+                      disabledModels={disabledModels}
+                      onEdit={handleEdit}
+                      onDelete={handleDelete}
+                      onRefreshModels={handleRefreshModels}
+                      onSetDefault={handleSetDefault}
+                      onToggleSync={handleToggleProviderSync}
+                      onToggleModel={toggleModelEnabled}
+                      onSetAllModelsEnabled={setAllModelsEnabled}
+                      onSetProviderModelsEnabled={setProviderModelsEnabled}
+                    />
+
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="text-xs text-muted-foreground">
+                        Click the refresh icon next to a provider to fetch available models.
+                        Connection mode is remembered per provider.
+                      </div>
                       <Button
-                        key={preset.label}
+                        type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => handleAddPreset(preset)}
+                        onClick={handleExportSettings}
+                        disabled={providers.length === 0}
+                        aria-label="Export provider settings"
                       >
-                        {preset.label}
+                        <DownloadIcon className="size-3.5" />
+                        Export
                       </Button>
-                    ))}
-                  </div>
-                </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
 
-                <ProvidersList
-                  providers={providers}
-                  providerSyncEnabled={providerSyncEnabled}
-                  providerSyncUnlocked={providerSyncKey !== null}
-                  providerSyncStatus={providerSyncStatus}
-                  providerSyncPending={providerSyncPending}
-                  disabledModels={disabledModels}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                  onRefreshModels={handleRefreshModels}
-                  onSetDefault={handleSetDefault}
-                  onToggleSync={handleToggleProviderSync}
-                  onToggleModel={toggleModelEnabled}
-                  onSetAllModelsEnabled={setAllModelsEnabled}
-                  onSetProviderModelsEnabled={setProviderModelsEnabled}
-                />
+            {activeSection === "appearance" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Appearance</CardTitle>
+                  <CardDescription>Customize the look and feel.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <AppearanceTab />
+                </CardContent>
+              </Card>
+            )}
 
-                <div className="flex items-center justify-between gap-4">
-                  <div className="text-xs text-muted-foreground">
-                    Click the refresh icon next to a provider to fetch available models. Connection
-                    mode is remembered per provider.
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExportSettings}
-                    disabled={providers.length === 0}
-                    aria-label="Export provider settings"
-                  >
-                    <DownloadIcon className="size-3.5" />
-                    Export
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="appearance">
-            <Card>
-              <CardHeader>
-                <CardTitle>Appearance</CardTitle>
-                <CardDescription>Customize the look and feel.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AppearanceTab />
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="data">
-            <Card>
-              <CardHeader>
-                <CardTitle>Data</CardTitle>
-                <CardDescription>Configure external database connection.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <DataTab />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+            {activeSection === "data" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Data</CardTitle>
+                  <CardDescription>Configure external database connection.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <DataTab />
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
       </div>
 
       <ProviderForm
