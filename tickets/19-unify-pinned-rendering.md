@@ -5,11 +5,11 @@ The function accepts an optional `icon` prop (default `MessageSquareIcon`, pinne
 
 **Blocked by:** None - can start immediately.
 
-**Status:** Ready For Dev
+**Status:** Done
 
 ## Tasks
 
-- [ ] Extend `renderConversationItem` to accept an optional `icon` prop defaulting to `MessageSquareIcon`
-- [ ] Replace the pinned section's inline JSX with `renderConversationItem(conversation, { icon: PinIcon })`
-- [ ] Verify pinned conversations still show the pin icon and all hover actions (rename, delete) work as before
-- [ ] Verify unpinned conversations still show the message-square icon
+- [x] Extend `renderConversationItem` to accept an optional `icon` prop defaulting to `MessageSquareIcon`
+- [x] Replace the pinned section's inline JSX with `renderConversationItem(conversation, { icon: PinIcon })`
+- [x] Verify pinned conversations still show the pin icon and all hover actions (rename, delete) work as before
+- [x] Verify unpinned conversations still show the message-square icon

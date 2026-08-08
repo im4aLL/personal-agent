@@ -266,14 +266,17 @@ export function AppSidebar() {
     });
   }
 
-  function renderConversationItem(conversation: Conversation) {
+  function renderConversationItem(
+    conversation: Conversation,
+    { icon: Icon = MessageSquareIcon }: { icon?: React.ComponentType<{ className?: string }> } = {},
+  ) {
     const isEditing = editingId === conversation.id;
 
     return (
       <SidebarMenuItem key={conversation.id}>
         {isEditing ? (
           <div className="flex flex-1 items-center gap-2 px-2 py-1.5">
-            <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
+            <Icon className="size-4 shrink-0 text-muted-foreground" />
             <Input
               ref={editInputRef}
               value={editDraft}
@@ -300,7 +303,7 @@ export function AppSidebar() {
               }}
               className="pr-14"
             >
-              <MessageSquareIcon className="size-4" />
+              <Icon className="size-4" />
               <span>{conversation.title}</span>
             </SidebarMenuButton>
             <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:opacity-100 focus-within:opacity-100 group-data-[collapsible=icon]:hidden">
@@ -436,72 +439,9 @@ export function AppSidebar() {
           <SidebarGroup className="py-1">
             <SidebarGroupLabel>Pinned</SidebarGroupLabel>
             <SidebarMenu>
-              {pinnedConversations.map((conversation) => {
-                const isEditing = editingId === conversation.id;
-
-                return (
-                  <SidebarMenuItem key={conversation.id}>
-                    {isEditing ? (
-                      <div className="flex flex-1 items-center gap-2 px-2 py-1.5">
-                        <PinIcon className="size-4 shrink-0 text-muted-foreground" />
-                        <Input
-                          ref={editInputRef}
-                          value={editDraft}
-                          onChange={(event) => setEditDraft(event.target.value)}
-                          onBlur={() => commitRename(conversation.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              commitRename(conversation.id);
-                            } else if (event.key === "Escape") {
-                              cancelRename();
-                            }
-                          }}
-                          className="h-7 min-w-0 flex-1 px-2 py-1 text-sm"
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <SidebarMenuButton
-                          tooltip={conversation.title}
-                          isActive={selectedConversationId === conversation.id}
-                          onClick={() => {
-                            selectConversation(conversation.id);
-                            navigate("/");
-                          }}
-                          className="pr-14"
-                        >
-                          <PinIcon className="size-4" />
-                          <span>{conversation.title}</span>
-                        </SidebarMenuButton>
-                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:opacity-100 focus-within:opacity-100 group-data-[collapsible=icon]:hidden">
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`Rename ${conversation.title}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              startRename(conversation);
-                            }}
-                          >
-                            <PencilIcon className="size-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`Delete ${conversation.title}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setDeleteTarget(conversation);
-                            }}
-                          >
-                            <Trash2Icon className="size-3" />
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </SidebarMenuItem>
-                );
-              })}
+              {pinnedConversations.map((conversation) =>
+                renderConversationItem(conversation, { icon: PinIcon }),
+              )}
             </SidebarMenu>
           </SidebarGroup>
         )}
