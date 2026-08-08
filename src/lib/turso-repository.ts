@@ -26,11 +26,15 @@ interface TursoMessageRow {
 }
 
 export async function runMigrations(): Promise<void> {
+  // Ensure schema_meta exists. SQLite tables always have an implicit rowid column.
   await tursoExecute(`
     CREATE TABLE IF NOT EXISTS schema_meta (
       version INTEGER NOT NULL
     )
   `);
+
+  // Clean up duplicate rows from earlier bug. Keep only the row with the smallest rowid.
+  await tursoExecute("DELETE FROM schema_meta WHERE rowid > (SELECT MIN(rowid) FROM schema_meta)");
 
   await tursoExecute(`
     CREATE TABLE IF NOT EXISTS conversations (
@@ -61,11 +65,9 @@ export async function runMigrations(): Promise<void> {
     )
   `);
 
-  const rows = await tursoSelect<{ version: number }>(
-    "SELECT MAX(version) as version FROM schema_meta",
-  );
+  const rows = await tursoSelect<{ cnt: number }>("SELECT COUNT(*) as cnt FROM schema_meta");
 
-  if (!rows[0] || rows[0].version === null) {
+  if (!rows[0] || rows[0].cnt === 0) {
     await tursoExecute("INSERT INTO schema_meta (version) VALUES (1)");
   }
 }
