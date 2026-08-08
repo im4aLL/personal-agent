@@ -234,6 +234,29 @@ export function MessageInput() {
     textareaRef.current?.focus();
   }, []);
 
+  useEffect(() => {
+    function handleWindowKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+
+      const target = event.target as HTMLElement;
+      const isInTextarea = target === textareaRef.current;
+      const isInInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+
+      if (isGenerating) {
+        event.preventDefault();
+        stop();
+      } else if (isInTextarea && value.length > 0) {
+        event.preventDefault();
+        setValue("");
+      } else if (!isInInput) {
+        return;
+      }
+    }
+
+    window.addEventListener("keydown", handleWindowKeyDown);
+    return () => window.removeEventListener("keydown", handleWindowKeyDown);
+  }, [isGenerating, stop, value]);
+
   function handleSend() {
     const trimmed = value.trim();
     if (!trimmed || isGenerating || !canSend) return;
