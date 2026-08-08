@@ -6,14 +6,18 @@ import {
   DownloadIcon,
   PaletteIcon,
   PlusIcon,
+  ScrollTextIcon,
   ServerIcon,
   SparklesIcon,
+  Wand2Icon,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { AgentsTab } from "#components/settings/agents-tab";
+import { InstructionsTab, SkillsTab, CustomAgentsTab } from "#components/settings/agents-tab";
 import { AppearanceTab } from "#components/settings/appearance-tab";
 import { DataTab } from "#components/settings/data-tab";
+import { getTursoConfig } from "#lib/turso";
+import { useAgentsStore } from "#store/agents";
 import { ProviderForm, type ProviderFormData } from "#components/settings/provider-form";
 import { ProvidersList } from "#components/settings/providers-list";
 import { Button } from "#components/ui/button";
@@ -30,14 +34,52 @@ import { cn } from "#lib/utils";
 import type { ConnectionMode } from "#lib/providers";
 import { PROVIDER_PRESETS, type ProviderInfo, useChatStore } from "#store/chat";
 
-type SettingsSection = "providers" | "agents" | "appearance" | "data";
+type SettingsSection = "providers" | "appearance" | "data" | "instructions" | "skills" | "agents";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "providers", label: "Providers", icon: ServerIcon },
-  { id: "agents", label: "Agents", icon: BotIcon },
   { id: "appearance", label: "Appearance", icon: PaletteIcon },
   { id: "data", label: "Data", icon: DatabaseIcon },
+  { id: "instructions", label: "Instructions", icon: ScrollTextIcon },
+  { id: "skills", label: "Skills", icon: Wand2Icon },
+  { id: "agents", label: "Agents", icon: BotIcon },
 ];
+
+function AgentsSectionsGuard({ children }: { children: React.ReactNode }) {
+  const isLoading = useAgentsStore((s) => s.isLoading);
+  const error = useAgentsStore((s) => s.error);
+
+  if (!getTursoConfig()) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-center">
+        <BotIcon className="mb-4 size-12 text-muted-foreground" />
+        <h3 className="text-lg font-medium">Configure Turso to use agents</h3>
+        <p className="mt-2 text-sm text-muted-foreground">
+          User instructions, skills, and custom agents require a Turso database connection.
+          Set it up in the Data tab.
+        </p>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-sm text-destructive">Error: {error}</p>
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
 
 export default function SettingsPage() {
   const providers = useChatStore((state) => state.providers);
@@ -248,16 +290,50 @@ export default function SettingsPage() {
               </>
             )}
 
+            {activeSection === "instructions" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Instructions</CardTitle>
+                  <CardDescription>
+                    User instructions prepended to every chat message as system prompts.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <AgentsSectionsGuard>
+                    <InstructionsTab />
+                  </AgentsSectionsGuard>
+                </CardContent>
+              </Card>
+            )}
+
+            {activeSection === "skills" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Skills</CardTitle>
+                  <CardDescription>
+                    One-shot prompts triggered by slash commands or mentions.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <AgentsSectionsGuard>
+                    <SkillsTab />
+                  </AgentsSectionsGuard>
+                </CardContent>
+              </Card>
+            )}
+
             {activeSection === "agents" && (
               <Card>
                 <CardHeader>
                   <CardTitle>Agents</CardTitle>
                   <CardDescription>
-                    Manage user instructions, skills, and custom agents.
+                    Custom agents with their own system prompts.
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <AgentsTab />
+                  <AgentsSectionsGuard>
+                    <CustomAgentsTab />
+                  </AgentsSectionsGuard>
                 </CardContent>
               </Card>
             )}

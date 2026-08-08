@@ -2,21 +2,15 @@
 
 import { BotIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
-import { Button } from "#components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "#components/ui/dialog";
-import { Input } from "#components/ui/input";
-import { Label } from "#components/ui/label";
+  DeleteConfirmDialog,
+  InstructionDialog,
+  ItemDialog,
+} from "#components/settings/agent-dialogs";
+import { Button } from "#components/ui/button";
 import { ScrollArea } from "#components/ui/scroll-area";
 import { Badge } from "#components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#components/ui/tabs";
-import { Textarea } from "#components/ui/textarea";
 import { getTursoConfig } from "#lib/turso";
 import { cn } from "#lib/utils";
 import type { CustomAgent, Skill, UserInstruction } from "#lib/types/chat";
@@ -24,242 +18,9 @@ import { useAgentsStore } from "#store/agents";
 
 type SubTab = "instructions" | "skills" | "agents";
 
-// ─── Instruction Dialog ──────────────────────────────────────────
-
-function InstructionDialog({
-  open,
-  onOpenChange,
-  editing,
-  onSave,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  editing: UserInstruction | null;
-  onSave: (name: string, content: string) => void;
-}) {
-  const [name, setName] = useState("");
-  const [content, setContent] = useState("");
-
-  useState(() => {
-    if (editing) {
-      setName(editing.name);
-      setContent(editing.content);
-    } else {
-      setName("");
-      setContent("");
-    }
-  });
-
-  function handleOpenChange(open: boolean) {
-    if (open && editing) {
-      setName(editing.name);
-      setContent(editing.content);
-    } else if (open && !editing) {
-      setName("");
-      setContent("");
-    }
-    onOpenChange(open);
-  }
-
-  function handleSubmit() {
-    const trimmedName = name.trim();
-    if (!trimmedName) return;
-    onSave(trimmedName, content);
-    onOpenChange(false);
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{editing ? "Edit instruction" : "New instruction"}</DialogTitle>
-          <DialogDescription>
-            User instructions are prepended to every chat message as system prompts.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="inst-name">Name</Label>
-            <Input
-              id="inst-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="My coding rules"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="inst-content">Content (Markdown)</Label>
-            <Textarea
-              id="inst-content"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your instructions in Markdown..."
-              rows={10}
-              className="max-h-60 overflow-auto font-mono text-sm"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={!name.trim()}>
-            {editing ? "Save" : "Create"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── Skill/Agent Dialog ──────────────────────────────────────────
-
-function ItemDialog({
-  open,
-  onOpenChange,
-  editing,
-  onSave,
-  type,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  editing: (Skill | CustomAgent) | null;
-  onSave: (name: string, description: string, content: string) => void;
-  type: "skill" | "agent";
-}) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [content, setContent] = useState("");
-
-  useState(() => {
-    if (editing) {
-      setName(editing.name);
-      setDescription(editing.description);
-      setContent(editing.content);
-    } else {
-      setName("");
-      setDescription("");
-      setContent("");
-    }
-  });
-
-  function handleOpenChange(open: boolean) {
-    if (open && editing) {
-      setName(editing.name);
-      setDescription(editing.description);
-      setContent(editing.content);
-    } else if (open && !editing) {
-      setName("");
-      setDescription("");
-      setContent("");
-    }
-    onOpenChange(open);
-  }
-
-  function handleSubmit() {
-    const trimmedName = name.trim();
-    if (!trimmedName) return;
-    onSave(trimmedName, description.trim(), content);
-    onOpenChange(false);
-  }
-
-  const label = type === "skill" ? "skill" : "agent";
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{editing ? `Edit ${label}` : `New ${label}`}</DialogTitle>
-          <DialogDescription>
-            {type === "skill"
-              ? "Skills are one-shot prompts triggered by slash commands or mentions."
-              : "Custom agents have their own system prompt and are triggered like skills."}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor={`${type}-name`}>Name</Label>
-            <Input
-              id={`${type}-name`}
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={type === "skill" ? "summarize" : "code-reviewer"}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`${type}-desc`}>Description</Label>
-            <Input
-              id={`${type}-desc`}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Brief description of what this does"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`${type}-content`}>Content</Label>
-            <Textarea
-              id={`${type}-content`}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="System prompt content..."
-              rows={8}
-              className="max-h-60 overflow-auto font-mono text-sm"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={!name.trim()}>
-            {editing ? "Save" : "Create"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ─── Delete Confirm Dialog ───────────────────────────────────────
-
-function DeleteConfirmDialog({
-  open,
-  onOpenChange,
-  name,
-  onConfirm,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  name: string;
-  onConfirm: () => void;
-}) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Delete</DialogTitle>
-          <DialogDescription>
-            Are you sure you want to delete{" "}
-            <span className="font-medium text-foreground">{name}</span>? This action cannot be
-            undone.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button variant="destructive" onClick={onConfirm}>
-            Delete
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 // ─── Instructions Tab ────────────────────────────────────────────
 
-function InstructionsTab() {
+export function InstructionsTab() {
   const instructions = useAgentsStore((s) => s.userInstructions);
   const activeInstructionId = useAgentsStore((s) => s.activeInstructionId);
   const createInstruction = useAgentsStore((s) => s.createInstruction);
@@ -303,7 +64,7 @@ function InstructionsTab() {
   return (
     <div className="flex gap-4 min-h-[400px]">
       {/* List */}
-      <div className="w-64 shrink-0 space-y-2">
+      <div className="w-64 shrink-0 space-y-2 overflow-hidden">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">Instructions</h3>
           <Button size="sm" variant="outline" onClick={handleCreate}>
@@ -311,22 +72,22 @@ function InstructionsTab() {
             New
           </Button>
         </div>
-        <ScrollArea className="h-[340px] rounded-md border">
+        <ScrollArea className="h-[340px] w-full rounded-md border">
           {instructions.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">No instructions yet.</p>
           ) : (
-            <div className="space-y-1 p-1">
+            <div className="space-y-1 p-1 overflow-x-hidden">
               {instructions.map((instruction) => (
                 <button
                   key={instruction.id}
                   type="button"
                   className={cn(
-                    "flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
+                    "grid w-full grid-cols-[1fr_auto] items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent",
                     selectedId === instruction.id && "bg-accent",
                   )}
                   onClick={() => setSelectedId(instruction.id)}
                 >
-                  <span className="flex-1 truncate">{instruction.name}</span>
+                  <span className="truncate">{instruction.name}</span>
                   {instruction.isActive && (
                     <Badge variant="secondary" className="text-xs">
                       Active
@@ -410,7 +171,7 @@ function InstructionsTab() {
 
 // ─── Skills Tab ──────────────────────────────────────────────────
 
-function SkillsTab() {
+export function SkillsTab() {
   const skills = useAgentsStore((s) => s.skills);
   const createSkill = useAgentsStore((s) => s.createSkill);
   const updateSkill = useAgentsStore((s) => s.updateSkill);
@@ -514,7 +275,7 @@ function SkillsTab() {
 
 // ─── Agents Tab ──────────────────────────────────────────────────
 
-function CustomAgentsTab() {
+export function CustomAgentsTab() {
   const agents = useAgentsStore((s) => s.customAgents);
   const createCustomAgent = useAgentsStore((s) => s.createCustomAgent);
   const updateCustomAgent = useAgentsStore((s) => s.updateCustomAgent);
