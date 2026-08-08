@@ -6,24 +6,30 @@ import {
   ChevronDownIcon,
   Loader2Icon,
   PaperclipIcon,
-  SearchIcon,
   SquareIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "#components/ui/button";
 import {
+  Combobox,
+  ComboboxContent,
+  ComboboxEmpty,
+  ComboboxGroup,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxLabel,
+  ComboboxList,
+  ComboboxSeparator,
+  ComboboxTrigger,
+} from "#components/ui/combobox";
+import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#components/ui/dropdown-menu";
-import { Input } from "#components/ui/input";
 import { Textarea } from "#components/ui/textarea";
 import { useChat } from "#hooks/use-chat";
 import { useChatStore } from "#store/chat";
@@ -43,8 +49,8 @@ function ModelSelector() {
   const setSelectedModel = useChatStore((state) => state.setSelectedModel);
   const refreshProviderModels = useChatStore((state) => state.refreshProviderModels);
   const disabledModels = useChatStore((state) => state.disabledModels);
-  const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState("");
 
   const options = useMemo(
     () =>
@@ -64,17 +70,6 @@ function ModelSelector() {
     [providers, disabledModels],
   );
 
-  const filteredOptions = useMemo(() => {
-    if (!search.trim()) return options;
-    const lower = search.toLowerCase();
-    return options.filter(
-      (option) =>
-        option.modelId.toLowerCase().includes(lower) ||
-        option.providerName.toLowerCase().includes(lower) ||
-        option.label.toLowerCase().includes(lower),
-    );
-  }, [options, search]);
-
   const providersNeedingRefresh = useMemo(
     () =>
       providers.filter(
@@ -84,143 +79,116 @@ function ModelSelector() {
     [providers],
   );
 
-  const visibleProviders = useMemo(
-    () =>
-      providers.filter((provider) =>
-        filteredOptions.some((option) => option.providerId === provider.id),
-      ),
-    [providers, filteredOptions],
-  );
-
   const selectedValue = `${selectedModel.providerId}:${selectedModel.modelId}`;
   const selectedLabel =
     options.find((option) => option.value === selectedValue)?.label ?? "Select model";
   const isLoading = providers.some((provider) => provider.isLoadingModels);
 
+  const filteredOptions = useMemo(() => {
+    if (!inputValue.trim()) return options;
+    const lower = inputValue.toLowerCase();
+    return options.filter(
+      (option) =>
+        option.modelId.toLowerCase().includes(lower) ||
+        option.providerName.toLowerCase().includes(lower) ||
+        option.label.toLowerCase().includes(lower),
+    );
+  }, [options, inputValue]);
+
+  // Provider IDs that have at least one enabled model
+  const visibleProviderIds = useMemo(
+    () =>
+      providers
+        .filter((provider) =>
+          filteredOptions.some((option) => option.providerId === provider.id),
+        )
+        .map((provider) => provider.id),
+    [providers, filteredOptions],
+  );
+
   useEffect(() => {
-    if (!isOpen) {
-      setSearch("");
+    if (!open) {
+      setInputValue("");
       return;
     }
 
     for (const provider of providersNeedingRefresh) {
       void refreshProviderModels(provider.id);
     }
-  }, [isOpen, providersNeedingRefresh, refreshProviderModels]);
-
-  function handleRetry(providerId: string) {
-    void refreshProviderModels(providerId);
-  }
+  }, [open, providersNeedingRefresh, refreshProviderModels]);
 
   return (
-    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="h-9 gap-1 px-2 text-xs">
-          {isLoading ? <Loader2Icon className="size-3 animate-spin" /> : null}
-          {selectedLabel}
-          <ChevronDownIcon className="size-3 text-muted-foreground" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
-        <div className="px-2 py-1.5">
-          <div className="relative">
-            <SearchIcon className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              className="h-7 pl-7 text-xs"
-              placeholder="Search models..."
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  const first = filteredOptions[0];
-                  if (first) {
-                    setSelectedModel(first.providerId, first.modelId);
-                    setIsOpen(false);
-                  }
-                }
-              }}
-            />
-          </div>
-        </div>
-        <DropdownMenuSeparator />
-        {providers.length === 0 ? (
-          <DropdownMenuLabel>No providers configured</DropdownMenuLabel>
-        ) : filteredOptions.length === 0 ? (
-          <DropdownMenuLabel>No models match your search</DropdownMenuLabel>
-        ) : (
-          visibleProviders.map((provider, index) => {
-            const providerModels = filteredOptions.filter(
-              (option) => option.providerId === provider.id,
-            );
-            const enabledModels = provider.models.filter(
-              (m) =>
-                !disabledModels.has(`${provider.id}:${m.id}`) &&
-                providerModels.some((option) => option.modelId === m.id),
-            );
-            const hasModels = provider.models.length > 0;
-            const hasEnabledModels = enabledModels.length > 0;
-            const allDisabled = hasModels && !hasEnabledModels && !provider.isLoadingModels;
+    <Combobox
+      value={selectedValue}
+      onValueChange={(value) => {
+        const option = options.find((o) => o.value === value);
+        if (option) {
+          setSelectedModel(option.providerId, option.modelId);
+        }
+      }}
+      filter={() => true}
+      autoHighlight={false}
+      open={open}
+      onOpenChange={setOpen}
+      onInputValueChange={setInputValue}
+    >
+      <ComboboxTrigger
+        render={
+          <Button type="button" variant="ghost" size="sm" className="h-9 gap-1 px-2 text-xs">
+            {isLoading ? <Loader2Icon className="size-3 animate-spin" /> : null}
+            {selectedLabel}
+            <ChevronDownIcon className="size-3 text-muted-foreground" />
+          </Button>
+        }
+      />
+      <ComboboxContent>
+        <ComboboxInput showTrigger={false} placeholder="Search models..." />
+        <ComboboxList>
+          {providers.length === 0 ? (
+            <ComboboxEmpty>No providers configured</ComboboxEmpty>
+          ) : (
+            visibleProviderIds.map((providerId, index) => {
+              const provider = providers.find((p) => p.id === providerId);
+              if (!provider) return null;
+              const providerOptions = filteredOptions.filter(
+                (option) => option.providerId === providerId,
+              );
 
-            return (
-              <DropdownMenuGroup key={provider.id}>
-                <DropdownMenuLabel>
-                  {provider.label}
-                  {allDisabled && (
-                    <span className="ml-2 text-xs font-normal text-destructive">All disabled</span>
-                  )}
-                </DropdownMenuLabel>
-                {provider.isLoadingModels && provider.models.length === 0 && (
-                  <DropdownMenuItem disabled>
+              if (provider.isLoadingModels && provider.models.length === 0) {
+                return (
+                  <ComboboxEmpty key={providerId}>
                     <Loader2Icon className="mr-2 size-4 animate-spin" />
                     Loading models...
-                  </DropdownMenuItem>
-                )}
-                {provider.modelsError && (
-                  <DropdownMenuItem
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      handleRetry(provider.id);
-                    }}
-                  >
-                    <Loader2Icon className="mr-2 size-4" />
+                  </ComboboxEmpty>
+                );
+              }
+
+              if (provider.modelsError) {
+                return (
+                  <ComboboxEmpty key={providerId}>
                     Error: {provider.modelsError}
-                  </DropdownMenuItem>
-                )}
-                {hasEnabledModels && (
-                  <DropdownMenuRadioGroup
-                    value={selectedValue}
-                    onValueChange={(value) => {
-                      const option = options.find((item) => item.value === value);
-                      if (option) {
-                        setSelectedModel(option.providerId, option.modelId);
-                      }
-                    }}
-                  >
-                    {enabledModels.map((model) => {
-                      const value = `${provider.id}:${model.id}`;
-                      return (
-                        <DropdownMenuRadioItem key={value} value={value}>
-                          {model.name}
-                        </DropdownMenuRadioItem>
-                      );
-                    })}
-                  </DropdownMenuRadioGroup>
-                )}
-                {allDisabled && <DropdownMenuItem disabled>All models disabled</DropdownMenuItem>}
-                {provider.models.length === 0 &&
-                  !provider.isLoadingModels &&
-                  !provider.modelsError && (
-                    <DropdownMenuItem disabled>No models found</DropdownMenuItem>
-                  )}
-                {index < visibleProviders.length - 1 && <DropdownMenuSeparator />}
-              </DropdownMenuGroup>
-            );
-          })
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+                  </ComboboxEmpty>
+                );
+              }
+
+              return (
+                <Fragment key={providerId}>
+                  <ComboboxGroup>
+                    <ComboboxLabel>{provider.label}</ComboboxLabel>
+                    {providerOptions.map((option) => (
+                      <ComboboxItem key={option.value} value={option.value}>
+                        {option.modelId}
+                      </ComboboxItem>
+                    ))}
+                  </ComboboxGroup>
+                  {index < visibleProviderIds.length - 1 && <ComboboxSeparator />}
+                </Fragment>
+              );
+            })
+          )}
+        </ComboboxList>
+      </ComboboxContent>
+    </Combobox>
   );
 }
 
