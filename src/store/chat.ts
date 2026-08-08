@@ -72,6 +72,7 @@ export type ChatState = {
   monthsLoading: Set<string>;
   providerSyncEnabled: boolean;
   providerSyncKey: CryptoKey | null;
+  providerSyncKeyLoaded: boolean;
   providerSyncStatus: SyncStatus;
   providerSyncError: string | null;
   providerSyncSummary: MergeSummary | null;
@@ -106,7 +107,7 @@ export type ChatState = {
   setDefaultProvider: (id: string) => void;
   setProviderSyncEnabledFlag: (providerId: string, enabled: boolean) => void;
   refreshProviderModels: (providerId: string) => Promise<void>;
-  enableProviderSync: (options: { passphrase?: string; recoveryKey?: string }) => Promise<void>;
+  enableProviderSync: (options: { passphrase?: string; recoveryKey?: string }) => Promise<string | undefined>;
   disableProviderSync: () => void;
   syncProviders: (
     onSummary?: (summary: MergeSummary) => Promise<boolean>,
@@ -369,6 +370,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   monthsLoading: new Set(),
   providerSyncEnabled: providerStorage.isProviderSyncEnabled(),
   providerSyncKey: null,
+  providerSyncKeyLoaded: false,
   providerSyncStatus: "never-synced",
   providerSyncError: null,
   providerSyncSummary: null,
@@ -384,20 +386,31 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   createConversation: (selectAfterCreate = false) => {
     const id = createConversationId();
+    const now = new Date();
     const newConversation: Conversation = {
       id,
       title: DEFAULT_CONVERSATION_TITLE,
       messages: [],
       pinned: false,
       tags: [],
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const newSummary: ConversationSummary = {
+      id,
+      title: DEFAULT_CONVERSATION_TITLE,
+      pinned: false,
+      tags: [],
+      createdAt: now,
+      updatedAt: now,
     };
 
     set((state) => ({
       conversations: [newConversation, ...state.conversations],
       selectedConversationId: selectAfterCreate ? id : state.selectedConversationId,
       loadedConversationIds: new Set([...state.loadedConversationIds, id]),
+      today: [newSummary, ...state.today],
     }));
 
     return id;
@@ -925,7 +938,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({ providers: nextProviders, selectedModel: nextSelectedModel });
     persistProviders(nextProviders);
-    void get().syncProviders();
+
+    void (async () => {
+      try {
+        await providerSync.deleteRemoteProvider(id);
+      } catch {
+        // Best-effort: local deletion already applied; a future sync can retry.
+      }
+      await get().syncProviders();
+    })();
   },
 
   setDefaultProvider: (id) => {
@@ -948,7 +969,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({ providers: nextProviders });
     persistProviders(nextProviders);
-    void get().syncProviders();
+
+    void (async () => {
+      if (!enabled) {
+        try {
+          await providerSync.deleteRemoteProvider(providerId);
+        } catch {
+          // Best-effort: local flag already updated; a future sync can retry.
+        }
+      }
+      await get().syncProviders();
+    })();
   },
 
   refreshProviderModels: async (providerId) => {
@@ -1118,28 +1149,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   loadProviderSyncKey: async () => {
     if (!providerStorage.isProviderSyncEnabled()) {
+      set({ providerSyncKeyLoaded: true });
       return;
     }
 
     const key = await loadStoredProviderSyncKey();
     if (key) {
-      set({ providerSyncKey: key });
+      set({ providerSyncKey: key, providerSyncKeyLoaded: true });
       // Automatically sync on load to update status.
       // No onSummary callback - if data is unchanged this is a no-op status update.
       // If data differs, changes are applied without confirmation since sync was already
       // enabled by the user on a previous session.
       void get().syncProviders();
+    } else {
+      set({ providerSyncKeyLoaded: true });
     }
   },
 
   enableProviderSync: async (options) => {
     let key: CryptoKey;
+    let recoveryKey: string | undefined;
 
     try {
       if (options.recoveryKey) {
+        recoveryKey = options.recoveryKey;
         key = await providerEncryption.importKeyFromBase64(options.recoveryKey);
       } else if (options.passphrase) {
         key = await providerEncryption.deriveKeyFromPassphrase(options.passphrase);
+        // Export the derived key so we can store and reload it.
+        const exported = await crypto.subtle.exportKey("raw", key);
+        recoveryKey = providerEncryption.base64Encode(new Uint8Array(exported));
       } else {
         throw new Error("Provide a passphrase or recovery key to enable sync.");
       }
@@ -1149,16 +1188,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
       throw error;
     }
 
-    if (options.recoveryKey && isBrowser()) {
+    if (recoveryKey && isBrowser()) {
       try {
-        window.localStorage.setItem(PROVIDER_SYNC_KEY_STORAGE_KEY, options.recoveryKey);
+        window.localStorage.setItem(PROVIDER_SYNC_KEY_STORAGE_KEY, recoveryKey);
       } catch {
         // Ignore storage errors.
       }
     }
 
     providerStorage.setProviderSyncEnabled(true);
-    set({ providerSyncEnabled: true, providerSyncKey: key, providerSyncError: null });
+    set({ providerSyncEnabled: true, providerSyncKey: key, providerSyncKeyLoaded: true, providerSyncError: null });
+    return recoveryKey;
   },
 
   disableProviderSync: () => {
@@ -1167,6 +1207,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({
       providerSyncEnabled: false,
       providerSyncKey: null,
+      providerSyncKeyLoaded: true,
       providerSyncStatus: "never-synced",
       providerSyncError: null,
     });

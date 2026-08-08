@@ -37,9 +37,9 @@ import { PROVIDER_PRESETS, type ProviderInfo, useChatStore } from "#store/chat";
 type SettingsSection = "providers" | "appearance" | "data" | "instructions" | "skills" | "agents";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "data", label: "Data", icon: DatabaseIcon },
   { id: "providers", label: "Providers", icon: ServerIcon },
   { id: "appearance", label: "Appearance", icon: PaletteIcon },
-  { id: "data", label: "Data", icon: DatabaseIcon },
   { id: "instructions", label: "Instructions", icon: ScrollTextIcon },
   { id: "skills", label: "Skills", icon: Wand2Icon },
   { id: "agents", label: "Agents", icon: BotIcon },
@@ -91,14 +91,14 @@ export default function SettingsPage() {
   const refreshProviderModels = useChatStore((state) => state.refreshProviderModels);
   const providerSyncEnabled = useChatStore((state) => state.providerSyncEnabled);
   const providerSyncKey = useChatStore((state) => state.providerSyncKey);
-  const providerSyncStatus = useChatStore((state) => state.providerSyncStatus);
   const providerSyncPending = useChatStore((state) => state.providerSyncPending);
+  const providerSyncKeyLoaded = useChatStore((state) => state.providerSyncKeyLoaded);
   const disabledModels = useChatStore((state) => state.disabledModels);
   const toggleModelEnabled = useChatStore((state) => state.toggleModelEnabled);
   const setProviderModelsEnabled = useChatStore((state) => state.setProviderModelsEnabled);
   const setAllModelsEnabled = useChatStore((state) => state.setAllModelsEnabled);
 
-  const [activeSection, setActiveSection] = useState<SettingsSection>("providers");
+  const [activeSection, setActiveSection] = useState<SettingsSection>("data");
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null);
   const [deleteConfirmProvider, setDeleteConfirmProvider] = useState<ProviderInfo | null>(null);
@@ -255,7 +255,7 @@ export default function SettingsPage() {
                       providers={providers}
                       providerSyncEnabled={providerSyncEnabled}
                       providerSyncUnlocked={providerSyncKey !== null}
-                      providerSyncStatus={providerSyncStatus}
+                      providerSyncKeyLoaded={providerSyncKeyLoaded}
                       providerSyncPending={providerSyncPending}
                       disabledModels={disabledModels}
                       onEdit={handleEdit}

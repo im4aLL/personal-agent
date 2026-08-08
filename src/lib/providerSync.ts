@@ -27,17 +27,19 @@ export type SyncProviderRemoteRow = {
   synced_at: string;
 };
 
-export async function pushProviders(key: CryptoKey): Promise<void> {
+export async function pushProviders(key: CryptoKey, providers?: providerStorage.ProviderRecord[]): Promise<void> {
   const config = getTursoConfig();
   if (!config) {
     throw new Error("Turso not configured");
   }
 
-  const providers = providerStorage.getAll().filter((item) => item.syncEnabled);
+  const toPush = (providers ?? providerStorage.getAll()).filter((item) => item.syncEnabled);
   const now = new Date().toISOString();
 
+  if (toPush.length === 0) return;
+
   const requests = await Promise.all(
-    providers.map(async (provider) => ({
+    toPush.map(async (provider) => ({
       sql: `INSERT OR REPLACE INTO provider_configs (
         id, label, base_url, encrypted_key, connection_mode, is_default, updated_at, synced_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -129,16 +131,15 @@ export async function mergeAndApply(
       const remoteTime = new Date(remoteProvider.updated_at).getTime();
 
       if (localTime > remoteTime) {
-        merged.push(localProvider);
-        if (localProvider.syncEnabled) {
-          summary.pushes.push(localProvider);
-        }
+        const updated = { ...localProvider, syncEnabled: true };
+        merged.push(updated);
+        summary.pushes.push(updated);
       } else if (remoteTime > localTime) {
-        const overwritten = { ...remoteProvider, name: nameFromLabel(remoteProvider.label) };
+        const overwritten = { ...remoteProvider, name: nameFromLabel(remoteProvider.label), syncEnabled: true };
         merged.push(overwritten);
         summary.overwrites.push(overwritten);
       } else {
-        merged.push(localProvider);
+        merged.push({ ...localProvider, syncEnabled: true });
       }
     }
   }
@@ -155,8 +156,21 @@ export async function mergeAndApply(
     }
   }
 
+  await pushProviders(key, merged);
+
+  // Reconcile: verify which providers actually made it to the cloud.
+  // Any provider with syncEnabled: true that is not in the remote after
+  // the push should have its flag turned off so the UI reflects reality.
+  const remoteAfter = await pullProviders(key);
+  const remoteAfterIds = new Set(remoteAfter.map((r) => r.id));
+
+  for (const record of merged) {
+    if (record.syncEnabled && !remoteAfterIds.has(record.id)) {
+      record.syncEnabled = false;
+    }
+  }
+
   providerStorage.saveAll(merged);
-  await pushProviders(key);
   return { summary, applied: true };
 }
 

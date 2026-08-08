@@ -6,13 +6,11 @@ import {
   CircleAlertIcon,
   Loader2Icon,
   RefreshCwIcon,
-  XCircleIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "#components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "#components/ui/collapsible";
 import { Switch } from "#components/ui/switch";
-import type { SyncStatus } from "#lib/providerSync";
 import { cn } from "#lib/utils";
 import type { ProviderInfo } from "#store/chat";
 
@@ -20,7 +18,7 @@ interface ProvidersListProps {
   providers: ProviderInfo[];
   providerSyncEnabled: boolean;
   providerSyncUnlocked: boolean;
-  providerSyncStatus: SyncStatus;
+  providerSyncKeyLoaded: boolean;
   providerSyncPending: boolean;
   disabledModels: Set<string>;
   onEdit: (provider: ProviderInfo) => void;
@@ -52,7 +50,7 @@ export function ProvidersList({
   providers,
   providerSyncEnabled,
   providerSyncUnlocked,
-  providerSyncStatus,
+  providerSyncKeyLoaded,
   providerSyncPending,
   disabledModels,
   onEdit,
@@ -98,7 +96,7 @@ export function ProvidersList({
           provider={provider}
           providerSyncEnabled={providerSyncEnabled}
           providerSyncUnlocked={providerSyncUnlocked}
-          providerSyncStatus={providerSyncStatus}
+          providerSyncKeyLoaded={providerSyncKeyLoaded}
           providerSyncPending={providerSyncPending}
           disabledModels={disabledModels}
           isFirst={index === 0}
@@ -120,7 +118,7 @@ interface ProviderRowProps {
   provider: ProviderInfo;
   providerSyncEnabled: boolean;
   providerSyncUnlocked: boolean;
-  providerSyncStatus: SyncStatus;
+  providerSyncKeyLoaded: boolean;
   providerSyncPending: boolean;
   disabledModels: Set<string>;
   isFirst: boolean;
@@ -138,7 +136,7 @@ function ProviderRow({
   provider,
   providerSyncEnabled,
   providerSyncUnlocked,
-  providerSyncStatus,
+  providerSyncKeyLoaded,
   providerSyncPending,
   disabledModels,
   isFirst,
@@ -195,7 +193,7 @@ function ProviderRow({
                   syncEnabled={provider.syncEnabled}
                   globalSyncEnabled={providerSyncEnabled}
                   globalUnlocked={providerSyncUnlocked}
-                  globalStatus={providerSyncStatus}
+                  keyLoaded={providerSyncKeyLoaded}
                   isPending={providerSyncPending}
                 />
               </div>
@@ -302,8 +300,14 @@ function ProviderRow({
               const isEnabled = !disabledModels.has(modelKey);
 
               return (
-                <div key={model.id} className="flex items-center justify-between gap-3 py-1.5">
-                  <span className="truncate text-sm">{model.name}</span>
+                <div key={model.id} className="flex items-center justify-between gap-3 rounded px-2 py-1.5 hover:bg-background transition-colors">
+                  <button
+                    type="button"
+                    className="truncate text-sm text-left cursor-pointer"
+                    onClick={() => onToggleModel(provider.id, model.id, !isEnabled)}
+                  >
+                    {model.name}
+                  </button>
                   <Switch
                     checked={isEnabled}
                     onCheckedChange={(checked) => onToggleModel(provider.id, model.id, checked)}
@@ -338,17 +342,41 @@ function SyncStatusBadge({
   syncEnabled,
   globalSyncEnabled,
   globalUnlocked,
-  globalStatus,
+  keyLoaded,
   isPending,
 }: {
   syncEnabled?: boolean;
   globalSyncEnabled: boolean;
   globalUnlocked: boolean;
-  globalStatus: SyncStatus;
+  keyLoaded: boolean;
   isPending: boolean;
 }) {
-  if (!globalSyncEnabled || !syncEnabled) {
-    return null;
+  if (!globalSyncEnabled) {
+    return (
+      <span
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
+          "border-gray-200 bg-gray-100 text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200",
+        )}
+      >
+        <CircleAlertIcon className="size-3" />
+        Sync off
+      </span>
+    );
+  }
+
+  if (!keyLoaded) {
+    return (
+      <span
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
+          "border-gray-200 bg-gray-100 text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200",
+        )}
+      >
+        <Loader2Icon className="size-3 animate-spin" />
+        Loading
+      </span>
+    );
   }
 
   if (!globalUnlocked) {
@@ -379,42 +407,29 @@ function SyncStatusBadge({
     );
   }
 
-  switch (globalStatus) {
-    case "synced":
-      return (
-        <span
-          className={cn(
-            "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
-            "border-green-200 bg-green-100 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200",
-          )}
-        >
-          <CheckCircleIcon className="size-3" />
-          Synced
-        </span>
-      );
-    case "error":
-      return (
-        <span
-          className={cn(
-            "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
-            "border-red-200 bg-red-100 text-red-800 dark:border-red-900 dark:bg-red-950 dark:text-red-200",
-          )}
-        >
-          <XCircleIcon className="size-3" />
-          Error
-        </span>
-      );
-    default:
-      return (
-        <span
-          className={cn(
-            "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
-            "border-gray-200 bg-gray-100 text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200",
-          )}
-        >
-          <CircleAlertIcon className="size-3" />
-          Not synced
-        </span>
-      );
+  if (syncEnabled) {
+    return (
+      <span
+        className={cn(
+          "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
+          "border-green-200 bg-green-100 text-green-800 dark:border-green-900 dark:bg-green-950 dark:text-green-200",
+        )}
+      >
+        <CheckCircleIcon className="size-3" />
+        Synced
+      </span>
+    );
   }
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
+        "border-gray-200 bg-gray-100 text-gray-800 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-200",
+      )}
+    >
+      <CircleAlertIcon className="size-3" />
+      Not synced
+    </span>
+  );
 }
