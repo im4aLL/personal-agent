@@ -33,29 +33,27 @@ export function EmptyState({ providers }: EmptyStateProps) {
           <AlertCircleIcon className="size-6 text-destructive" />
         </div>
         <h1 className="text-2xl font-semibold text-foreground">No provider configured</h1>
-        <p className="mt-2 max-w-sm text-muted-foreground">
-          Add an AI provider to start chatting.
-        </p>
+        <p className="mt-2 max-w-sm text-muted-foreground">Add an AI provider to start chatting.</p>
 
         <div className="mt-6 grid w-full max-w-2xl grid-cols-2 gap-4">
           <div className="rounded-lg border bg-card p-6 text-left">
             <h2 className="mb-3 text-sm font-semibold">1. Add an AI provider</h2>
             <ol className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <span className="font-medium text-foreground">1.</span>{" "}
-                Go to Settings and open the Providers tab.
+                <span className="font-medium text-foreground">1.</span> Go to Settings and open the
+                Providers tab.
               </li>
               <li>
-                <span className="font-medium text-foreground">2.</span>{" "}
-                Click a Quick Add preset (e.g. OpenAI, Ollama) or Add provider.
+                <span className="font-medium text-foreground">2.</span> Click a Quick Add preset
+                (e.g. OpenAI, Ollama) or Add provider.
               </li>
               <li>
-                <span className="font-medium text-foreground">3.</span>{" "}
-                Enter your API key if required, then click Fetch models.
+                <span className="font-medium text-foreground">3.</span> Enter your API key if
+                required, then click Fetch models.
               </li>
               <li>
-                <span className="font-medium text-foreground">4.</span>{" "}
-                Select a model from the dropdown and start chatting.
+                <span className="font-medium text-foreground">4.</span> Select a model from the
+                dropdown and start chatting.
               </li>
             </ol>
           </div>
@@ -70,8 +68,7 @@ export function EmptyState({ providers }: EmptyStateProps) {
             </p>
             <ol className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <span className="font-medium text-foreground">1.</span>{" "}
-                Create a database at{" "}
+                <span className="font-medium text-foreground">1.</span> Create a database at{" "}
                 <a
                   href="https://turso.tech"
                   target="_blank"
@@ -79,15 +76,16 @@ export function EmptyState({ providers }: EmptyStateProps) {
                   className="underline underline-offset-2 hover:text-foreground"
                 >
                   turso.tech
-                </a>.
+                </a>
+                .
               </li>
               <li>
-                <span className="font-medium text-foreground">2.</span>{" "}
-                Go to Settings and open the Data tab.
+                <span className="font-medium text-foreground">2.</span> Go to Settings and open the
+                Data tab.
               </li>
               <li>
-                <span className="font-medium text-foreground">3.</span>{" "}
-                Paste your libsql:// URL and auth token.
+                <span className="font-medium text-foreground">3.</span> Paste your libsql:// URL and
+                auth token.
               </li>
             </ol>
           </div>

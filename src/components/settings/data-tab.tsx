@@ -1,12 +1,23 @@
 "use client";
 
-import { CheckCircleIcon, CircleAlertIcon, Loader2Icon, XCircleIcon } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import {
+  CheckCircleIcon,
+  CircleAlertIcon,
+  Loader2Icon,
+  RefreshCwIcon,
+  XCircleIcon,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import type { ProviderSyncSetupResult } from "#components/settings/provider-sync-setup-dialog";
+import { ProviderSyncSetupDialog } from "#components/settings/provider-sync-setup-dialog";
+import { ProviderSyncSummaryDialog } from "#components/settings/provider-sync-summary-dialog";
 import { Button } from "#components/ui/button";
 import { Input } from "#components/ui/input";
 import { Label } from "#components/ui/label";
+import { Switch } from "#components/ui/switch";
 import { clearTursoConfig, loadTursoToken, loadTursoUrl, saveTursoConfig } from "#lib/config";
+import type { MergeSummary } from "#lib/providerSync";
 import { getTursoConfig, tursoSelect } from "#lib/turso";
 import { useChatStore } from "#store/chat";
 
@@ -32,6 +43,24 @@ export function DataTab() {
   const [initialized, setInitialized] = useState(false);
   const [touched, setTouched] = useState({ url: false, token: false });
 
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
+  const [pendingSummary, setPendingSummary] = useState<MergeSummary | null>(null);
+
+  const resolveSummaryRef = useRef<((value: boolean) => void) | null>(null);
+
+  const providerSyncEnabled = useChatStore((state) => state.providerSyncEnabled);
+  const providerSyncKey = useChatStore((state) => state.providerSyncKey);
+  const providerSyncStatus = useChatStore((state) => state.providerSyncStatus);
+  const providerSyncPending = useChatStore((state) => state.providerSyncPending);
+  const providerSyncError = useChatStore((state) => state.providerSyncError);
+
+  const loadHistory = useChatStore((state) => state.loadHistory);
+  const loadProviderSyncKey = useChatStore((state) => state.loadProviderSyncKey);
+  const enableProviderSync = useChatStore((state) => state.enableProviderSync);
+  const disableProviderSync = useChatStore((state) => state.disableProviderSync);
+  const syncProviders = useChatStore((state) => state.syncProviders);
+
   useEffect(() => {
     const savedUrl = loadTursoUrl();
     const savedToken = loadTursoToken();
@@ -50,6 +79,10 @@ export function DataTab() {
     }
   }, [url, token, initialized]);
 
+  useEffect(() => {
+    void loadProviderSyncKey();
+  }, [loadProviderSyncKey]);
+
   const urlError = useMemo(() => {
     if (!touched.url) return "";
     if (!url.trim()) return "Turso URL is required.";
@@ -64,8 +97,7 @@ export function DataTab() {
   }, [token, touched.token]);
 
   const isValid = Boolean(url.trim() && token.trim() && !urlError && !tokenError);
-
-  const loadHistory = useChatStore((state) => state.loadHistory);
+  const isTursoConfigured = isValid;
 
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
@@ -112,101 +144,300 @@ export function DataTab() {
     }
   }
 
-  function renderStatusBadge() {
-    switch (status) {
-      case "checking":
-        return (
-          <span className="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
-            <Loader2Icon className="size-3.5 animate-spin" />
-            Checking...
-          </span>
-        );
-      case "connected":
+  function handleToggleSync(enabled: boolean) {
+    if (!enabled) {
+      disableProviderSync();
+      toast.success("Provider sync disabled", {
+        description: "Local providers are unchanged.",
+      });
+      return;
+    }
+
+    if (!isTursoConfigured) {
+      toast.error("Turso not configured", {
+        description: "Enter your Turso URL and token before enabling sync.",
+      });
+      return;
+    }
+
+    setSetupOpen(true);
+  }
+
+  function handleUnlock() {
+    setSetupOpen(true);
+  }
+
+  async function handleSetupSubmit(result: ProviderSyncSetupResult) {
+    try {
+      if (result.mode === "passphrase") {
+        await enableProviderSync({ passphrase: result.passphrase });
+      } else {
+        await enableProviderSync({ recoveryKey: result.recoveryKey });
+      }
+      setSetupOpen(false);
+      void runManualSync();
+    } catch {
+      // Error state is already set in the store; toast is shown via effect below.
+    }
+  }
+
+  async function runManualSync() {
+    if (!providerSyncEnabled) {
+      return;
+    }
+
+    const result = await syncProviders(async (mergeSummary) => {
+      setPendingSummary(mergeSummary);
+      setSummaryOpen(true);
+      return new Promise<boolean>((resolve) => {
+        resolveSummaryRef.current = resolve;
+      });
+    });
+
+    if (!result.applied) {
+      return;
+    }
+
+    if (result.summary.imports.length > 0 || result.summary.overwrites.length > 0) {
+      toast.success("Providers synced", {
+        description: `Imported ${result.summary.imports.length}, overwritten ${result.summary.overwrites.length}.`,
+      });
+    } else {
+      toast.success("Providers synced", {
+        description: "All providers are up to date.",
+      });
+    }
+  }
+
+  function handleSummaryConfirm() {
+    setSummaryOpen(false);
+    resolveSummaryRef.current?.(true);
+    resolveSummaryRef.current = null;
+  }
+
+  function handleSummaryCancel() {
+    setSummaryOpen(false);
+    resolveSummaryRef.current?.(false);
+    resolveSummaryRef.current = null;
+  }
+
+  useEffect(() => {
+    if (providerSyncError) {
+      toast.error("Provider sync failed", {
+        description: providerSyncError,
+      });
+    }
+  }, [providerSyncError]);
+
+  function renderSyncStatusBadge() {
+    if (providerSyncEnabled && !providerSyncKey) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+          <CircleAlertIcon className="size-3.5" />
+          Locked
+        </span>
+      );
+    }
+
+    if (providerSyncPending) {
+      return (
+        <span className="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+          <Loader2Icon className="size-3.5 animate-spin" />
+          Syncing...
+        </span>
+      );
+    }
+
+    switch (providerSyncStatus) {
+      case "synced":
         return (
           <span className="inline-flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
             <CheckCircleIcon className="size-3.5" />
-            Connected
+            Synced
           </span>
         );
-      case "failed":
+      case "error":
         return (
           <span className="inline-flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400">
             <XCircleIcon className="size-3.5" />
-            Connection failed
+            Sync error
+          </span>
+        );
+      case "pending":
+        return (
+          <span className="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+            <Loader2Icon className="size-3.5 animate-spin" />
+            Syncing...
           </span>
         );
       default:
         return (
           <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
             <CircleAlertIcon className="size-3.5" />
-            Not connected
+            Not synced
           </span>
         );
     }
   }
 
   return (
-    <form onSubmit={handleSave} className="space-y-4">
-      <div>
-        <h3 className="text-base font-medium">Turso Database</h3>
-        <p className="text-sm text-muted-foreground">
-          Connect to a Turso database for persistent storage.
-        </p>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium">Status:</span>
-        {renderStatusBadge()}
-      </div>
-
-      <div className="grid gap-4">
-        <div className="grid gap-2">
-          <Label htmlFor="turso-url">Turso URL</Label>
-          <Input
-            id="turso-url"
-            placeholder="libsql://...turso.io"
-            value={url}
-            onChange={(event) => setUrl(event.target.value)}
-            onBlur={() => setTouched((prev) => ({ ...prev, url: true }))}
-            aria-invalid={Boolean(urlError)}
-            aria-describedby={urlError ? "turso-url-error" : undefined}
-          />
-          {urlError && (
-            <p id="turso-url-error" className="text-sm text-destructive">
-              {urlError}
-            </p>
-          )}
+    <div className="space-y-8">
+      <form onSubmit={handleSave} className="space-y-4">
+        <div>
+          <h3 className="text-base font-medium">Turso Database</h3>
+          <p className="text-sm text-muted-foreground">
+            Connect to a Turso database for persistent storage.
+          </p>
         </div>
 
-        <div className="grid gap-2">
-          <Label htmlFor="turso-token">Auth Token</Label>
-          <Input
-            id="turso-token"
-            type="password"
-            placeholder="eyJ..."
-            value={token}
-            onChange={(event) => setToken(event.target.value)}
-            onBlur={() => setTouched((prev) => ({ ...prev, token: true }))}
-            aria-invalid={Boolean(tokenError)}
-            aria-describedby={tokenError ? "turso-token-error" : undefined}
-          />
-          {tokenError && (
-            <p id="turso-token-error" className="text-sm text-destructive">
-              {tokenError}
-            </p>
+        <div className="flex items-center gap-3">
+          <span className="text-sm font-medium">Status:</span>
+          {renderStatusBadge(status)}
+        </div>
+
+        <div className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="turso-url">Turso URL</Label>
+            <Input
+              id="turso-url"
+              placeholder="libsql://...turso.io"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              onBlur={() => setTouched((prev) => ({ ...prev, url: true }))}
+              aria-invalid={Boolean(urlError)}
+              aria-describedby={urlError ? "turso-url-error" : undefined}
+            />
+            {urlError && (
+              <p id="turso-url-error" className="text-sm text-destructive">
+                {urlError}
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="turso-token">Auth Token</Label>
+            <Input
+              id="turso-token"
+              type="password"
+              placeholder="eyJ..."
+              value={token}
+              onChange={(event) => setToken(event.target.value)}
+              onBlur={() => setTouched((prev) => ({ ...prev, token: true }))}
+              aria-invalid={Boolean(tokenError)}
+              aria-describedby={tokenError ? "turso-token-error" : undefined}
+            />
+            {tokenError && (
+              <p id="turso-token-error" className="text-sm text-destructive">
+                {tokenError}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Button type="submit">Save</Button>
+          <Button type="button" variant="outline" onClick={handleTestConnection}>
+            Test Connection
+          </Button>
+          <Button type="button" variant="ghost" onClick={handleClear}>
+            Clear
+          </Button>
+        </div>
+      </form>
+
+      <div className="space-y-4 border-t pt-6">
+        <div>
+          <h3 className="text-base font-medium">Provider Sync</h3>
+          <p className="text-sm text-muted-foreground">
+            Sync provider configurations across devices using Turso. API keys are encrypted before
+            leaving this device.
+          </p>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium">Status:</span>
+            {renderSyncStatusBadge()}
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">Sync providers</span>
+            <Switch
+              checked={providerSyncEnabled}
+              onCheckedChange={handleToggleSync}
+              disabled={!isTursoConfigured && !providerSyncEnabled}
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void runManualSync()}
+            disabled={!providerSyncEnabled || !providerSyncKey || providerSyncPending}
+          >
+            {providerSyncPending ? (
+              <Loader2Icon className="size-3.5 animate-spin" />
+            ) : (
+              <RefreshCwIcon className="size-3.5" />
+            )}
+            Sync now
+          </Button>
+          {providerSyncEnabled && !providerSyncKey && (
+            <Button type="button" variant="outline" onClick={handleUnlock}>
+              Unlock sync
+            </Button>
           )}
         </div>
       </div>
 
-      <div className="flex gap-2">
-        <Button type="submit">Save</Button>
-        <Button type="button" variant="outline" onClick={handleTestConnection}>
-          Test Connection
-        </Button>
-        <Button type="button" variant="ghost" onClick={handleClear}>
-          Clear
-        </Button>
-      </div>
-    </form>
+      <ProviderSyncSetupDialog
+        open={setupOpen}
+        onOpenChange={setSetupOpen}
+        onSubmit={handleSetupSubmit}
+      />
+
+      <ProviderSyncSummaryDialog
+        open={summaryOpen}
+        onOpenChange={(open) => {
+          if (!open) handleSummaryCancel();
+        }}
+        summary={pendingSummary}
+        onConfirm={handleSummaryConfirm}
+      />
+    </div>
   );
+}
+
+function renderStatusBadge(status: ConnectionStatus) {
+  switch (status) {
+    case "checking":
+      return (
+        <span className="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+          <Loader2Icon className="size-3.5 animate-spin" />
+          Checking...
+        </span>
+      );
+    case "connected":
+      return (
+        <span className="inline-flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+          <CheckCircleIcon className="size-3.5" />
+          Connected
+        </span>
+      );
+    case "failed":
+      return (
+        <span className="inline-flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400">
+          <XCircleIcon className="size-3.5" />
+          Connection failed
+        </span>
+      );
+    default:
+      return (
+        <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+          <CircleAlertIcon className="size-3.5" />
+          Not connected
+        </span>
+      );
+  }
 }

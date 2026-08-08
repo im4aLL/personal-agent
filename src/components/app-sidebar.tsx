@@ -180,7 +180,10 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <Link to="/" className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center">
+        <Link
+          to="/"
+          className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center"
+        >
           <PersonalAgentLogo className="size-10 shrink-0 group-data-[collapsible=icon]:size-8" />
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
             <span className="text-sm font-semibold leading-tight">Personal Agent</span>

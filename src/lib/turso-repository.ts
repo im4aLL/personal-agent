@@ -65,10 +65,28 @@ export async function runMigrations(): Promise<void> {
     )
   `);
 
-  const rows = await tursoSelect<{ cnt: number }>("SELECT COUNT(*) as cnt FROM schema_meta");
+  const rows = await tursoSelect<{ version: number | null }>("SELECT version FROM schema_meta");
+  let version = rows[0]?.version ?? 0;
 
-  if (!rows[0] || rows[0].cnt === 0) {
+  if (version === 0) {
     await tursoExecute("INSERT INTO schema_meta (version) VALUES (1)");
+    version = 1;
+  }
+
+  if (version < 2) {
+    await tursoExecute(`
+      CREATE TABLE IF NOT EXISTS provider_configs (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL,
+        base_url TEXT NOT NULL,
+        encrypted_key TEXT NOT NULL,
+        connection_mode TEXT NOT NULL,
+        is_default INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL,
+        synced_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    await tursoExecute("UPDATE schema_meta SET version = 2");
   }
 }
 

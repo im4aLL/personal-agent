@@ -27,7 +27,12 @@ export default function SettingsPage() {
   const updateProvider = useChatStore((state) => state.updateProvider);
   const deleteProvider = useChatStore((state) => state.deleteProvider);
   const setDefaultProvider = useChatStore((state) => state.setDefaultProvider);
+  const setProviderSyncEnabledFlag = useChatStore((state) => state.setProviderSyncEnabledFlag);
   const refreshProviderModels = useChatStore((state) => state.refreshProviderModels);
+  const providerSyncEnabled = useChatStore((state) => state.providerSyncEnabled);
+  const providerSyncKey = useChatStore((state) => state.providerSyncKey);
+  const providerSyncStatus = useChatStore((state) => state.providerSyncStatus);
+  const providerSyncPending = useChatStore((state) => state.providerSyncPending);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null);
@@ -91,6 +96,10 @@ export default function SettingsPage() {
 
   function handleSetDefault(provider: ProviderInfo) {
     setDefaultProvider(provider.id);
+  }
+
+  function handleToggleProviderSync(provider: ProviderInfo, enabled: boolean) {
+    setProviderSyncEnabledFlag(provider.id, enabled);
   }
 
   function handleExportSettings() {
@@ -166,10 +175,15 @@ export default function SettingsPage() {
 
                 <ProvidersList
                   providers={providers}
+                  providerSyncEnabled={providerSyncEnabled}
+                  providerSyncUnlocked={providerSyncKey !== null}
+                  providerSyncStatus={providerSyncStatus}
+                  providerSyncPending={providerSyncPending}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onRefreshModels={handleRefreshModels}
                   onSetDefault={handleSetDefault}
+                  onToggleSync={handleToggleProviderSync}
                 />
 
                 <div className="flex items-center justify-between gap-4">
@@ -227,7 +241,12 @@ export default function SettingsPage() {
         existingProviders={providers}
       />
 
-      <Dialog open={deleteConfirmProvider !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmProvider(null); }}>
+      <Dialog
+        open={deleteConfirmProvider !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteConfirmProvider(null);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete provider</DialogTitle>

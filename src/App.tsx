@@ -9,10 +9,12 @@ import { useChatStore } from "#store/chat";
 function HistoryLoader() {
   const loadHistory = useChatStore((state) => state.loadHistory);
   const historyError = useChatStore((state) => state.historyError);
+  const loadProviderSyncKey = useChatStore((state) => state.loadProviderSyncKey);
 
   useEffect(() => {
     void loadHistory();
-  }, [loadHistory]);
+    void loadProviderSyncKey();
+  }, [loadHistory, loadProviderSyncKey]);
 
   useEffect(() => {
     if (historyError) {

@@ -1,12 +1,12 @@
+"use client";
+
 import { create } from "zustand";
-import {
-  loadProviders,
-  loadSelectedModel,
-  saveProviders,
-  saveSelectedModel,
-  toStoredModelSelection,
-  toStoredProvider,
-} from "#lib/config";
+import { loadSelectedModel, saveSelectedModel, toStoredModelSelection } from "#lib/config";
+import * as providerEncryption from "#lib/providerEncryption";
+import type { ProviderRecord } from "#lib/providerStorage";
+import * as providerStorage from "#lib/providerStorage";
+import type { MergeSummary, SyncStatus } from "#lib/providerSync";
+import * as providerSync from "#lib/providerSync";
 import type { ConnectionMode, ModelInfo, ProviderInput } from "#lib/providers";
 import { fetchProviderModels } from "#lib/providers";
 import { getTursoConfig } from "#lib/turso";
@@ -24,6 +24,8 @@ import { applyMessageEdit, regenerateMessages } from "./chat-helpers";
 
 export type { ConnectionMode, ProviderInput };
 
+const PROVIDER_SYNC_KEY_STORAGE_KEY = "personal-agent:provider-sync-key";
+
 export type ProviderInfo = {
   id: string;
   name: string;
@@ -35,6 +37,7 @@ export type ProviderInfo = {
   models: ModelInfo[];
   isLoadingModels?: boolean;
   modelsError?: string | null;
+  syncEnabled?: boolean;
 };
 
 export const DEFAULT_CONVERSATION_TITLE = "New chat";
@@ -48,6 +51,12 @@ export type ChatState = {
   isHistoryLoaded: boolean;
   isHistoryLoading: boolean;
   historyError: string | null;
+  providerSyncEnabled: boolean;
+  providerSyncKey: CryptoKey | null;
+  providerSyncStatus: SyncStatus;
+  providerSyncError: string | null;
+  providerSyncSummary: MergeSummary | null;
+  providerSyncPending: boolean;
   selectConversation: (id: string | null) => void;
   setSelectedModel: (providerId: string, modelId: string) => void;
   setConversations: (conversations: Conversation[]) => void;
@@ -70,7 +79,14 @@ export type ChatState = {
   updateProvider: (id: string, input: ProviderInput) => void;
   deleteProvider: (id: string) => void;
   setDefaultProvider: (id: string) => void;
+  setProviderSyncEnabledFlag: (providerId: string, enabled: boolean) => void;
   refreshProviderModels: (providerId: string) => Promise<void>;
+  enableProviderSync: (options: { passphrase?: string; recoveryKey?: string }) => Promise<void>;
+  disableProviderSync: () => void;
+  syncProviders: (
+    onSummary?: (summary: MergeSummary) => Promise<boolean>,
+  ) => Promise<providerSync.MergeResult>;
+  loadProviderSyncKey: () => Promise<void>;
 };
 
 export const PROVIDER_PRESETS: ProviderInput[] = [
@@ -131,18 +147,39 @@ function parseManualModels(value: string | undefined): ModelInfo[] {
     .map((id) => ({ id, name: id }));
 }
 
-function loadProviderState(): ProviderInfo[] {
-  const stored = loadProviders();
-  if (stored && stored.length > 0) {
-    return stored.map((item) => ({
-      ...item,
-      models: item.models ? item.models.map((id) => ({ id, name: id })) : [],
-      isLoadingModels: false,
-      modelsError: null,
-    }));
-  }
+function recordToProvider(record: ProviderRecord): ProviderInfo {
+  return {
+    id: record.id,
+    name: record.name,
+    label: record.label,
+    baseUrl: record.baseUrl,
+    apiKey: record.apiKey,
+    isDefault: record.isDefault,
+    connectionMode: record.connectionMode,
+    models: record.models ? record.models.map((id) => ({ id, name: id })) : [],
+    isLoadingModels: false,
+    modelsError: null,
+    syncEnabled: record.syncEnabled,
+  };
+}
 
-  return [];
+function providerToRecord(provider: ProviderInfo): ProviderRecord {
+  return {
+    id: provider.id,
+    name: provider.name,
+    label: provider.label,
+    baseUrl: provider.baseUrl,
+    apiKey: provider.apiKey,
+    isDefault: provider.isDefault,
+    connectionMode: provider.connectionMode,
+    models: provider.models.map((model) => model.id),
+    updated_at: new Date().toISOString(),
+    syncEnabled: provider.syncEnabled,
+  };
+}
+
+function loadProviderState(): ProviderInfo[] {
+  return providerStorage.getAll().map(recordToProvider);
 }
 
 function loadModelSelection(): { providerId: string; modelId: string } {
@@ -163,6 +200,39 @@ function loadConversations(): Conversation[] {
 
 function isTursoConfigured(): boolean {
   return getTursoConfig() !== null;
+}
+
+function isBrowser(): boolean {
+  return typeof window !== "undefined";
+}
+
+async function loadStoredProviderSyncKey(): Promise<CryptoKey | null> {
+  if (!isBrowser()) {
+    return null;
+  }
+
+  try {
+    const stored = window.localStorage.getItem(PROVIDER_SYNC_KEY_STORAGE_KEY);
+    if (!stored) {
+      return null;
+    }
+
+    return providerEncryption.importKeyFromBase64(stored);
+  } catch {
+    return null;
+  }
+}
+
+function clearStoredProviderSyncKey(): void {
+  if (!isBrowser()) {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(PROVIDER_SYNC_KEY_STORAGE_KEY);
+  } catch {
+    // Ignore storage errors.
+  }
 }
 
 export function createConversationId(): string {
@@ -188,19 +258,7 @@ export function getSelectedModelInfo(
 }
 
 function persistProviders(providers: ProviderInfo[]) {
-  const stored = providers.map((provider) =>
-    toStoredProvider({
-      id: provider.id,
-      name: provider.name,
-      label: provider.label,
-      baseUrl: provider.baseUrl,
-      apiKey: provider.apiKey,
-      isDefault: provider.isDefault,
-      connectionMode: provider.connectionMode,
-      models: provider.models.map((model) => model.id),
-    }),
-  );
-  saveProviders(stored);
+  providerStorage.saveAll(providers.map(providerToRecord));
 }
 
 function persistSelectedModel(selection: { providerId: string; modelId: string }) {
@@ -228,6 +286,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isHistoryLoaded: false,
   isHistoryLoading: false,
   historyError: null,
+  providerSyncEnabled: providerStorage.isProviderSyncEnabled(),
+  providerSyncKey: null,
+  providerSyncStatus: "never-synced",
+  providerSyncError: null,
+  providerSyncSummary: null,
+  providerSyncPending: false,
 
   selectConversation: (id) => set({ selectedConversationId: id }),
 
@@ -469,11 +533,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       models: parseManualModels(input.models),
       isLoadingModels: false,
       modelsError: null,
+      syncEnabled: state.providerSyncEnabled,
     };
 
     const nextProviders = [...state.providers, newProvider];
     set({ providers: nextProviders });
     persistProviders(nextProviders);
+    void get().syncProviders();
   },
 
   updateProvider: (id, input) => {
@@ -495,6 +561,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({ providers: nextProviders });
     persistProviders(nextProviders);
+    void get().syncProviders();
   },
 
   deleteProvider: (id) => {
@@ -511,6 +578,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({ providers: nextProviders });
     persistProviders(nextProviders);
+    void get().syncProviders();
   },
 
   setDefaultProvider: (id) => {
@@ -522,6 +590,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({ providers: nextProviders });
     persistProviders(nextProviders);
+    void get().syncProviders();
+  },
+
+  setProviderSyncEnabledFlag: (providerId, enabled) => {
+    const state = get();
+    const nextProviders = state.providers.map((provider) =>
+      provider.id === providerId ? { ...provider, syncEnabled: enabled } : provider,
+    );
+
+    set({ providers: nextProviders });
+    persistProviders(nextProviders);
+    void get().syncProviders();
   },
 
   refreshProviderModels: async (providerId) => {
@@ -593,6 +673,102 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set({ providers: nextProviders });
       persistProviders(nextProviders);
+    }
+  },
+
+  loadProviderSyncKey: async () => {
+    if (!providerStorage.isProviderSyncEnabled()) {
+      return;
+    }
+
+    const key = await loadStoredProviderSyncKey();
+    if (key) {
+      set({ providerSyncKey: key });
+      // Automatically sync on load to update status.
+      // No onSummary callback - if data is unchanged this is a no-op status update.
+      // If data differs, changes are applied without confirmation since sync was already
+      // enabled by the user on a previous session.
+      void get().syncProviders();
+    }
+  },
+
+  enableProviderSync: async (options) => {
+    let key: CryptoKey;
+
+    try {
+      if (options.recoveryKey) {
+        key = await providerEncryption.importKeyFromBase64(options.recoveryKey);
+      } else if (options.passphrase) {
+        key = await providerEncryption.deriveKeyFromPassphrase(options.passphrase);
+      } else {
+        throw new Error("Provide a passphrase or recovery key to enable sync.");
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid encryption key";
+      set({ providerSyncError: message, providerSyncStatus: "error" });
+      throw error;
+    }
+
+    if (options.recoveryKey && isBrowser()) {
+      try {
+        window.localStorage.setItem(PROVIDER_SYNC_KEY_STORAGE_KEY, options.recoveryKey);
+      } catch {
+        // Ignore storage errors.
+      }
+    }
+
+    providerStorage.setProviderSyncEnabled(true);
+    set({ providerSyncEnabled: true, providerSyncKey: key, providerSyncError: null });
+  },
+
+  disableProviderSync: () => {
+    providerStorage.setProviderSyncEnabled(false);
+    clearStoredProviderSyncKey();
+    set({
+      providerSyncEnabled: false,
+      providerSyncKey: null,
+      providerSyncStatus: "never-synced",
+      providerSyncError: null,
+    });
+  },
+
+  syncProviders: async (onSummary) => {
+    const state = get();
+
+    if (!state.providerSyncEnabled || !state.providerSyncKey) {
+      return { summary: { imports: [], overwrites: [], pushes: [] }, applied: false };
+    }
+
+    if (!isTursoConfigured()) {
+      set({ providerSyncStatus: "error", providerSyncError: "Turso is not configured." });
+      return { summary: { imports: [], overwrites: [], pushes: [] }, applied: false };
+    }
+
+    set({ providerSyncPending: true, providerSyncStatus: "pending", providerSyncError: null });
+
+    try {
+      await runMigrations();
+      const result = await providerSync.mergeAndApply(state.providerSyncKey, onSummary);
+
+      if (result.applied) {
+        set({
+          providers: loadProviderState(),
+          providerSyncStatus: "synced",
+          providerSyncError: null,
+        });
+      } else {
+        set({
+          providerSyncStatus: state.providerSyncStatus === "synced" ? "synced" : "never-synced",
+        });
+      }
+
+      return result;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Provider sync failed";
+      set({ providerSyncStatus: "error", providerSyncError: message });
+      return { summary: { imports: [], overwrites: [], pushes: [] }, applied: false };
+    } finally {
+      set({ providerSyncPending: false });
     }
   },
 }));
