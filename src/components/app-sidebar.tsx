@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  ChevronDownIcon,
   Loader2Icon,
   MessageSquareIcon,
   PencilIcon,
@@ -10,10 +11,13 @@ import {
   SearchIcon,
   SettingsIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Badge } from "#components/ui/badge";
 import { Button } from "#components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "#components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -122,6 +126,8 @@ export function AppSidebar() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [tagsOpen, setTagsOpen] = useState(false);
   const editInputRef = useRef<HTMLInputElement>(null);
 
   const conversations = useChatStore((state) => state.conversations);
@@ -141,8 +147,22 @@ export function AppSidebar() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  const { allTags, taggedCount } = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const conversation of conversations) {
+      for (const tag of conversation.tags) {
+        counts.set(tag, (counts.get(tag) ?? 0) + 1);
+      }
+    }
+    const sorted = Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+    return { allTags: sorted, taggedCount: sorted.length };
+  }, [conversations]);
+
   const { pinnedConversations, unpinnedGroups } = useMemo(() => {
-    const filtered = searchConversations(conversations, searchQuery.trim());
+    let filtered = searchConversations(conversations, searchQuery.trim());
+    if (selectedTag) {
+      filtered = filtered.filter((c) => c.tags.includes(selectedTag));
+    }
     const pinned = filtered
       .filter((c) => c.pinned)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
@@ -151,7 +171,7 @@ export function AppSidebar() {
       pinnedConversations: pinned,
       unpinnedGroups: groupConversations(unpinned),
     };
-  }, [searchQuery, conversations]);
+  }, [searchQuery, conversations, selectedTag]);
 
   function handleNewChat() {
     createConversation(true);
@@ -225,6 +245,60 @@ export function AppSidebar() {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarGroup>
+
+        {taggedCount > 0 && (
+          <Collapsible open={tagsOpen} onOpenChange={setTagsOpen}>
+            <SidebarGroup className="py-1">
+              <CollapsibleTrigger asChild>
+                <SidebarGroupLabel className="cursor-pointer hover:text-foreground">
+                  Tags
+                  <span className="ml-auto flex items-center gap-1">
+                    <span className="text-muted-foreground text-[10px]">{taggedCount}</span>
+                    <ChevronDownIcon
+                      className={`size-3.5 text-muted-foreground transition-transform ${tagsOpen ? "rotate-180" : ""}`}
+                    />
+                  </span>
+                </SidebarGroupLabel>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <SidebarMenu>
+                  {allTags.map(([tag, count]) => (
+                    <SidebarMenuItem key={tag}>
+                      <SidebarMenuButton
+                        isActive={selectedTag === tag}
+                        onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                      >
+                        <span className="truncate flex-1 text-xs">{tag}</span>
+                        <Badge
+                          variant="secondary"
+                          className="ml-auto px-1.5 py-0 text-[10px] shrink-0"
+                        >
+                          {count}
+                        </Badge>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </CollapsibleContent>
+            </SidebarGroup>
+          </Collapsible>
+        )}
+
+        {selectedTag && (
+          <div className="px-3 py-1.5">
+            <Badge variant="secondary" className="gap-1 pr-1 text-xs">
+              {selectedTag}
+              <button
+                type="button"
+                onClick={() => setSelectedTag(null)}
+                className="ml-0.5 rounded-full p-0.5 hover:bg-muted-foreground/20"
+                aria-label={`Clear tag filter ${selectedTag}`}
+              >
+                <XIcon className="size-3" />
+              </button>
+            </Badge>
+          </div>
+        )}
 
         {pinnedConversations.length > 0 && (
           <SidebarGroup className="py-1">
@@ -421,10 +495,10 @@ export function AppSidebar() {
           pinnedConversations.length === 0 &&
           unpinnedGroups.length === 0 &&
           conversations.length > 0 && (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground">
-            No conversations found.
-          </div>
-        )}
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+              No conversations found.
+            </div>
+          )}
       </SidebarContent>
 
       <SidebarFooter>

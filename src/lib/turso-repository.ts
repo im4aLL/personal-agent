@@ -5,6 +5,7 @@ interface TursoConversationRow {
   id: string;
   title: string;
   pinned: number | null;
+  tags: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -94,6 +95,11 @@ export async function runMigrations(): Promise<void> {
     await tursoExecute("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
     await tursoExecute("UPDATE schema_meta SET version = 3");
   }
+
+  if (version < 4) {
+    await tursoExecute("ALTER TABLE conversations ADD COLUMN tags TEXT DEFAULT '[]'");
+    await tursoExecute("UPDATE schema_meta SET version = 4");
+  }
 }
 
 export async function loadConversations(): Promise<Conversation[]> {
@@ -101,7 +107,7 @@ export async function loadConversations(): Promise<Conversation[]> {
   if (!config) return [];
 
   const convRows = await tursoSelect<TursoConversationRow>(
-    "SELECT id, title, pinned, created_at, updated_at FROM conversations ORDER BY updated_at DESC",
+    "SELECT id, title, pinned, tags, created_at, updated_at FROM conversations ORDER BY updated_at DESC",
   );
 
   const conversations: Conversation[] = [];
@@ -132,11 +138,24 @@ export async function loadConversations(): Promise<Conversation[]> {
       thinkingLevel: m.thinking_level ?? undefined,
     }));
 
+    let tags: string[] = [];
+    if (row.tags) {
+      try {
+        const parsed = JSON.parse(row.tags);
+        if (Array.isArray(parsed) && parsed.every((t) => typeof t === "string")) {
+          tags = parsed;
+        }
+      } catch {
+        // Ignore malformed JSON.
+      }
+    }
+
     conversations.push({
       id: row.id,
       title: row.title,
       messages,
       pinned: row.pinned === 1,
+      tags,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     });
@@ -148,11 +167,12 @@ export async function loadConversations(): Promise<Conversation[]> {
 export async function saveConversation(conversation: Conversation): Promise<void> {
   const requests: Array<{ sql: string; args: unknown[] }> = [
     {
-      sql: `INSERT OR REPLACE INTO conversations (id, title, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
+      sql: `INSERT OR REPLACE INTO conversations (id, title, pinned, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
       args: [
         conversation.id,
         conversation.title,
         conversation.pinned ? 1 : 0,
+        JSON.stringify(conversation.tags ?? []),
         conversation.createdAt.toISOString(),
         conversation.updatedAt.toISOString(),
       ],

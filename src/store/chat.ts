@@ -73,6 +73,7 @@ export type ChatState = {
   deleteConversation: (id: string) => void;
   togglePin: (id: string) => void;
   setConversationTitle: (id: string, title: string) => void;
+  setConversationTags: (id: string, tags: string[]) => void;
   addMessage: (conversationId: string, message: Message) => void;
   appendMessageContent: (conversationId: string, messageId: string, delta: string) => void;
   appendMessageReasoning: (conversationId: string, messageId: string, delta: string) => void;
@@ -358,6 +359,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       title: DEFAULT_CONVERSATION_TITLE,
       messages: [],
       pinned: false,
+      tags: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -428,6 +430,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
         title: trimmed || conversation.title,
       })),
     }));
+  },
+
+  setConversationTags: (id, tags) => {
+    set((state) => {
+      const nextConversations = updateConversation(state, id, (conversation) => ({
+        ...conversation,
+        tags,
+      }));
+
+      if (isTursoConfigured()) {
+        const updated = nextConversations.find((c) => c.id === id);
+        if (updated) {
+          void saveConversation(updated);
+        }
+      }
+
+      return { conversations: nextConversations };
+    });
   },
 
   togglePin: (id) => {

@@ -32,6 +32,7 @@ export type Conversation = {
   title: string;
   messages: Message[];
   pinned: boolean;
+  tags: string[];
   updatedAt: Date;
   createdAt: Date;
 };
