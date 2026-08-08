@@ -129,6 +129,7 @@ export function MessageBubble({
               )}
               {message.reasoning && (
                 <ThinkingBlock
+                  key={`${message.id}-${isStreaming}`}
                   content={message.reasoning.content}
                   defaultCollapsed={isStreaming ? false : (message.reasoning.isCollapsed ?? true)}
                 />
