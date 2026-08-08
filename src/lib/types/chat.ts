@@ -45,3 +45,30 @@ export type Conversation = {
   updatedAt: Date;
   createdAt: Date;
 };
+
+export type UserInstruction = {
+  id: string;
+  name: string;
+  content: string;
+  isActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type Skill = {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type CustomAgent = {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  createdAt: Date;
+  updatedAt: Date;
+};

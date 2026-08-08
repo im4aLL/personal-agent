@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { proxyFetch } from "#lib/ai";
 import { generateConversationTitle } from "#lib/title";
 import type { Attachment, Message, MessageModelInfo } from "#lib/types/chat";
+import { useAgentsStore } from "#store/agents";
 import {
   createMessageId,
   DEFAULT_CONVERSATION_TITLE,
@@ -111,6 +112,35 @@ export function useChat() {
   const regenerateMessage = useChatStore((state) => state.regenerate);
   const editMessageInStore = useChatStore((state) => state.editMessage);
 
+  // Agents store
+  const activeInstructionId = useAgentsStore((s) => s.activeInstructionId);
+  const activeSkillId = useAgentsStore((s) => s.activeSkillId);
+  const activeAgentId = useAgentsStore((s) => s.activeAgentId);
+  const userInstructions = useAgentsStore((s) => s.userInstructions);
+  const agentSkills = useAgentsStore((s) => s.skills);
+  const agentCustomAgents = useAgentsStore((s) => s.customAgents);
+
+  const systemPrompt = useMemo(() => {
+    const parts: string[] = [];
+
+    if (activeInstructionId) {
+      const instruction = userInstructions.find((i) => i.id === activeInstructionId);
+      if (instruction?.content) parts.push(instruction.content);
+    }
+
+    if (activeSkillId) {
+      const skill = agentSkills.find((s) => s.id === activeSkillId);
+      if (skill?.content) parts.push(skill.content);
+    }
+
+    if (activeAgentId) {
+      const agent = agentCustomAgents.find((a) => a.id === activeAgentId);
+      if (agent?.content) parts.push(agent.content);
+    }
+
+    return parts.length > 0 ? parts.join("\n\n") : undefined;
+  }, [activeInstructionId, activeSkillId, activeAgentId, userInstructions, agentSkills, agentCustomAgents]);
+
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -158,7 +188,7 @@ export function useChat() {
   }, []);
 
   const streamAssistantResponse = useCallback(
-    async (conversationId: string, contextMessages: Message[]) => {
+    async (conversationId: string, contextMessages: Message[], systemPrompt?: string) => {
       if (!activeProvider) {
         return;
       }
@@ -212,6 +242,7 @@ export function useChat() {
           const { fullStream } = streamText({
             model,
             messages,
+            ...(systemPrompt ? { system: systemPrompt } : {}),
             abortSignal: abortControllerRef.current.signal,
             reasoning:
               thinkingLevel !== "off" ? (THINKING_TO_REASONING[thinkingLevel] ?? "medium") : "none",
@@ -324,10 +355,49 @@ export function useChat() {
         return;
       }
 
-      const trimmed = content.trim();
+      let trimmed = content.trim();
       const hasAttachments = attachments && attachments.length > 0;
       if (!trimmed && !hasAttachments) {
         return;
+      }
+
+      // Parse slash commands: /skillname or /agentname at the start of the message
+      const agentsState = useAgentsStore.getState();
+      let slashActivatedSkillId: string | null = null;
+      let slashActivatedAgentId: string | null = null;
+
+      const slashMatch = trimmed.match(/^\/(\S+)(?:\s+(.*))?$/s);
+      if (slashMatch) {
+        const commandName = slashMatch[1] ?? "";
+        const rest = slashMatch[2] ?? "";
+
+        // Check skills
+        const matchedSkill = agentsState.skills.find(
+          (s) => s.name.toLowerCase() === commandName.toLowerCase(),
+        );
+        if (matchedSkill) {
+          slashActivatedSkillId = matchedSkill.id;
+          agentsState.activateSkill(matchedSkill.id);
+          trimmed = rest.trim();
+        }
+
+        // Check agents
+        if (!slashActivatedSkillId) {
+          const matchedAgent = agentsState.customAgents.find(
+            (a) => a.name.toLowerCase() === commandName.toLowerCase(),
+          );
+          if (matchedAgent) {
+            slashActivatedAgentId = matchedAgent.id;
+            agentsState.activateAgent(matchedAgent.id);
+            trimmed = rest.trim();
+          }
+        }
+      }
+
+      // If the slash command consumed the entire message, don't send empty
+      if (!trimmed && !hasAttachments && (slashActivatedSkillId || slashActivatedAgentId)) {
+        // User just typed /skillname with no message - still send an empty message
+        // so the skill/agent system prompt is injected
       }
 
       const currentConversation = selectSelectedConversation(useChatStore.getState());
@@ -338,19 +408,28 @@ export function useChat() {
       const userMessage: Message = {
         id: createMessageId(),
         role: "user",
-        content: trimmed,
+        content: trimmed || "Hello",
         attachments: hasAttachments ? attachments : undefined,
         createdAt: new Date(),
       };
 
       addMessage(currentConversation.id, userMessage);
 
-      await streamAssistantResponse(currentConversation.id, [
-        ...currentConversation.messages,
-        userMessage,
-      ]);
+      await streamAssistantResponse(
+        currentConversation.id,
+        [...currentConversation.messages, userMessage],
+        systemPrompt,
+      );
+
+      // One-shot: deactivate skill/agent after response completes
+      if (slashActivatedSkillId) {
+        useAgentsStore.getState().deactivateSkill();
+      }
+      if (slashActivatedAgentId) {
+        useAgentsStore.getState().deactivateAgent();
+      }
     },
-    [activeProvider, addMessage, streamAssistantResponse],
+    [activeProvider, addMessage, streamAssistantResponse, systemPrompt],
   );
 
   const regenerate = useCallback(async () => {
@@ -373,8 +452,8 @@ export function useChat() {
       return;
     }
 
-    await streamAssistantResponse(currentConversation.id, currentConversation.messages);
-  }, [conversation, activeProvider, regenerateMessage, streamAssistantResponse]);
+    await streamAssistantResponse(currentConversation.id, currentConversation.messages, systemPrompt);
+  }, [conversation, activeProvider, regenerateMessage, streamAssistantResponse, systemPrompt]);
 
   const editMessage = useCallback(
     async (messageId: string, content: string) => {
@@ -397,9 +476,9 @@ export function useChat() {
         return;
       }
 
-      await streamAssistantResponse(currentConversation.id, currentConversation.messages);
+      await streamAssistantResponse(currentConversation.id, currentConversation.messages, systemPrompt);
     },
-    [conversation, activeProvider, editMessageInStore, streamAssistantResponse],
+    [conversation, activeProvider, editMessageInStore, streamAssistantResponse, systemPrompt],
   );
 
   const retry = useCallback(() => {

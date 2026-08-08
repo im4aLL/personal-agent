@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquareIcon, SparklesIcon } from "lucide-react";
+import { MessageSquareIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useChat } from "#hooks/use-chat";
 import type { Conversation } from "#lib/types/chat";

@@ -67,6 +67,39 @@ export async function runMigrations(): Promise<void> {
     )
   `);
 
+  await tursoExecute(`
+    CREATE TABLE IF NOT EXISTS user_instructions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  await tursoExecute(`
+    CREATE TABLE IF NOT EXISTS skills (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  await tursoExecute(`
+    CREATE TABLE IF NOT EXISTS custom_agents (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      content TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
   const rows = await tursoSelect<{ version: number | null }>("SELECT version FROM schema_meta");
   let version = rows[0]?.version ?? 0;
 
@@ -99,6 +132,10 @@ export async function runMigrations(): Promise<void> {
   if (version < 4) {
     await tursoExecute("ALTER TABLE conversations ADD COLUMN tags TEXT DEFAULT '[]'");
     await tursoExecute("UPDATE schema_meta SET version = 4");
+  }
+
+  if (version < 5) {
+    await tursoExecute("UPDATE schema_meta SET version = 5");
   }
 }
 

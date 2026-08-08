@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  BotIcon,
   DatabaseIcon,
   DownloadIcon,
   PaletteIcon,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { AgentsTab } from "#components/settings/agents-tab";
 import { AppearanceTab } from "#components/settings/appearance-tab";
 import { DataTab } from "#components/settings/data-tab";
 import { ProviderForm, type ProviderFormData } from "#components/settings/provider-form";
@@ -28,10 +30,11 @@ import { cn } from "#lib/utils";
 import type { ConnectionMode } from "#lib/providers";
 import { PROVIDER_PRESETS, type ProviderInfo, useChatStore } from "#store/chat";
 
-type SettingsSection = "providers" | "appearance" | "data";
+type SettingsSection = "providers" | "agents" | "appearance" | "data";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "providers", label: "Providers", icon: ServerIcon },
+  { id: "agents", label: "Agents", icon: BotIcon },
   { id: "appearance", label: "Appearance", icon: PaletteIcon },
   { id: "data", label: "Data", icon: DatabaseIcon },
 ];
@@ -243,6 +246,20 @@ export default function SettingsPage() {
                   </CardContent>
                 </Card>
               </>
+            )}
+
+            {activeSection === "agents" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Agents</CardTitle>
+                  <CardDescription>
+                    Manage user instructions, skills, and custom agents.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <AgentsTab />
+                </CardContent>
+              </Card>
             )}
 
             {activeSection === "appearance" && (

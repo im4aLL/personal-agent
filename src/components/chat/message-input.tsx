@@ -2,12 +2,14 @@
 
 import {
   ArrowUpIcon,
+  BotIcon,
   BrainIcon,
   ChevronDownIcon,
   FileTextIcon,
   ImageIcon,
   Loader2Icon,
   PaperclipIcon,
+  SparklesIcon,
   SquareIcon,
   XIcon,
 } from "lucide-react";
@@ -33,9 +35,11 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "#components/ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverAnchor } from "#components/ui/popover";
 import { Textarea } from "#components/ui/textarea";
 import { useChat } from "#hooks/use-chat";
 import type { Attachment } from "#lib/types/chat";
+import { useAgentsStore } from "#store/agents";
 import { useChatStore } from "#store/chat";
 
 const MAX_MESSAGE_LENGTH = 50000;
@@ -280,15 +284,107 @@ function ThinkingSelector() {
   );
 }
 
+function SlashCommandAutocomplete({
+  open,
+  onOpenChange,
+  onSelect,
+  anchorRef,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSelect: (name: string) => void;
+  anchorRef: React.RefObject<HTMLElement | null>;
+}) {
+  const skills = useAgentsStore((s) => s.skills);
+  const agents = useAgentsStore((s) => s.customAgents);
+
+  if (skills.length === 0 && agents.length === 0) return null;
+
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverAnchor asChild>
+        <div ref={anchorRef as React.RefObject<HTMLDivElement>} />
+      </PopoverAnchor>
+      <PopoverContent
+        className="w-64 p-1"
+        align="start"
+        side="top"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        <div className="max-h-60 overflow-auto">
+          {skills.length > 0 && (
+            <>
+              <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                <SparklesIcon className="size-3" />
+                Skills
+              </div>
+              {skills.map((skill) => (
+                <button
+                  key={skill.id}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                  onClick={() => onSelect(skill.name)}
+                >
+                  <span className="font-medium">/{skill.name}</span>
+                  {skill.description && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {skill.description}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </>
+          )}
+          {agents.length > 0 && (
+            <>
+              {skills.length > 0 && <div className="my-1 border-t" />}
+              <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+                <BotIcon className="size-3" />
+                Agents
+              </div>
+              {agents.map((agent) => (
+                <button
+                  key={agent.id}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                  onClick={() => onSelect(agent.name)}
+                >
+                  <span className="font-medium">/{agent.name}</span>
+                  {agent.description && (
+                    <span className="truncate text-xs text-muted-foreground">
+                      {agent.description}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function MessageInput() {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
+  const [slashOpen, setSlashOpen] = useState(false);
   const { sendMessage, stop, isGenerating, canSend, isOffline } = useChat();
   const selectedModel = useChatStore((state) => state.selectedModel);
   const disabledModels = useChatStore((state) => state.disabledModels);
   const providers = useChatStore((state) => state.providers);
+  const activeInstructionId = useAgentsStore((s) => s.activeInstructionId);
+  const activeSkillId = useAgentsStore((s) => s.activeSkillId);
+  const activeAgentId = useAgentsStore((s) => s.activeAgentId);
+  const userInstructions = useAgentsStore((s) => s.userInstructions);
+  const skills = useAgentsStore((s) => s.skills);
+  const agents = useAgentsStore((s) => s.customAgents);
+  const setActiveInstruction = useAgentsStore((s) => s.setActiveInstruction);
+  const deactivateSkill = useAgentsStore((s) => s.deactivateSkill);
+  const deactivateAgent = useAgentsStore((s) => s.deactivateAgent);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const slashAnchorRef = useRef<HTMLDivElement>(null);
 
   const activeProvider = useMemo(
     () => providers.find((p) => p.id === selectedModel.providerId),
@@ -306,6 +402,48 @@ export function MessageInput() {
     if (!canSend) return "No enabled models for this provider. Enable one in Settings.";
     return "Message...";
   }, [isOffline, activeProvider, isModelDisabled, canSend]);
+
+  const activeInstructionName = useMemo(() => {
+    if (!activeInstructionId) return null;
+    return userInstructions.find((i) => i.id === activeInstructionId)?.name ?? null;
+  }, [activeInstructionId, userInstructions]);
+
+  const activeSkillName = useMemo(() => {
+    if (!activeSkillId) return null;
+    return skills.find((s) => s.id === activeSkillId)?.name ?? null;
+  }, [activeSkillId, skills]);
+
+  const activeAgentName = useMemo(() => {
+    if (!activeAgentId) return null;
+    return agents.find((a) => a.id === activeAgentId)?.name ?? null;
+  }, [activeAgentId, agents]);
+
+  const hasActiveItems = activeInstructionName || activeSkillName || activeAgentName;
+
+  // Slash command detection
+  const slashQuery = useMemo(() => {
+    const match = value.match(/^\/(\S*)$/);
+    return match ? match[1] ?? "" : null;
+  }, [value]);
+
+  // Show slash autocomplete when user types "/" at the start
+  const showSlashAutocomplete = slashQuery !== null && (skills.length > 0 || agents.length > 0);
+
+  function handleSlashSelect(name: string) {
+    setValue(`/${name} `);
+    setSlashOpen(false);
+    textareaRef.current?.focus();
+  }
+
+  function handleValueChange(newValue: string) {
+    setValue(newValue);
+    // Show slash autocomplete when user types / at start
+    if (newValue.startsWith("/") && !newValue.includes(" ")) {
+      setSlashOpen(true);
+    } else {
+      setSlashOpen(false);
+    }
+  }
 
   useEffect(() => {
     textareaRef.current?.focus();
@@ -439,6 +577,54 @@ export function MessageInput() {
   return (
     <div className="border-t bg-background px-4 py-4">
       <div className="relative flex flex-col rounded-2xl border bg-background p-3 dark:bg-transparent">
+        {hasActiveItems && (
+          <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+            {activeInstructionName && (
+              <div className="inline-flex items-center gap-1 rounded-full border bg-accent/50 px-2.5 py-0.5 text-xs">
+                <span className="text-muted-foreground">Instruction:</span>
+                <span className="font-medium">{activeInstructionName}</span>
+                <button
+                  type="button"
+                  className="ml-0.5 rounded-full hover:bg-accent"
+                  aria-label={`Deactivate instruction ${activeInstructionName}`}
+                  onClick={() => setActiveInstruction(null)}
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </div>
+            )}
+            {activeSkillName && (
+              <div className="inline-flex items-center gap-1 rounded-full border bg-accent/50 px-2.5 py-0.5 text-xs">
+                <SparklesIcon className="size-3 text-muted-foreground" />
+                <span className="text-muted-foreground">Skill:</span>
+                <span className="font-medium">{activeSkillName}</span>
+                <button
+                  type="button"
+                  className="ml-0.5 rounded-full hover:bg-accent"
+                  aria-label={`Deactivate skill ${activeSkillName}`}
+                  onClick={() => deactivateSkill()}
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </div>
+            )}
+            {activeAgentName && (
+              <div className="inline-flex items-center gap-1 rounded-full border bg-accent/50 px-2.5 py-0.5 text-xs">
+                <BotIcon className="size-3 text-muted-foreground" />
+                <span className="text-muted-foreground">Agent:</span>
+                <span className="font-medium">{activeAgentName}</span>
+                <button
+                  type="button"
+                  className="ml-0.5 rounded-full hover:bg-accent"
+                  aria-label={`Deactivate agent ${activeAgentName}`}
+                  onClick={() => deactivateAgent()}
+                >
+                  <XIcon className="size-3" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
         {hasAttachments && (
           <div className="flex flex-wrap gap-2 px-4 pb-3">
             {attachments.map((attachment) => (
@@ -483,7 +669,7 @@ export function MessageInput() {
           <Textarea
             placeholder={placeholder}
             value={value}
-            onChange={(event) => setValue(event.target.value)}
+            onChange={(event) => handleValueChange(event.target.value)}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             rows={1}
@@ -493,6 +679,7 @@ export function MessageInput() {
             maxLength={MAX_MESSAGE_LENGTH}
             aria-label="Message input"
           />
+          <div ref={slashAnchorRef} className="absolute left-4 top-3" />
           <div className="p-1.5">
             {isGenerating ? (
               <Button
@@ -542,6 +729,12 @@ export function MessageInput() {
       <p className="mt-2 text-center text-xs text-muted-foreground">
         AI can make mistakes. Verify important information.
       </p>
+      <SlashCommandAutocomplete
+        open={slashOpen && showSlashAutocomplete}
+        onOpenChange={setSlashOpen}
+        onSelect={handleSlashSelect}
+        anchorRef={slashAnchorRef}
+      />
     </div>
   );
 }

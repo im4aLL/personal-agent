@@ -14,21 +14,21 @@ All three are read-only system prompt injectors -- they shape how the AI respond
 2. Explicit mention: "use the X skill", "run skill X" -> match against names
 3. Manual selection: dropdown/chip in message input to pick active skill/agent/instruction
 
-**Status:** Todo
+**Status:** Done
 
-- [ ] DB migration v5: add `user_instructions`, `skills`, `custom_agents` tables to `runMigrations()`
-- [ ] `lib/agent-repository.ts`: CRUD functions for all three tables (follow `turso-repository.ts` patterns)
-- [ ] `store/agents.ts`: Zustand store with CRUD actions, active selections, and Turso load
-- [ ] Settings > Agents tab with sub-tabs: Instructions, Skills, Custom Agents
-- [ ] Instructions tab: list markdown files, create/edit/delete, "Set Active" toggle, content editor
-- [ ] Skills tab: list skills (name + description + content), create/edit/delete
-- [ ] Custom Agents tab: list agents (name + description + system prompt), create/edit/delete
-- [ ] Slash command parser in `message-input.tsx` with autocomplete dropdown
-- [ ] Active indicator chips in message input (show active instruction/skill/agent, allow clearing)
-- [ ] Modify `useChat.sendMessage()` and `streamAssistantResponse()` to inject system messages from active instruction/skill/agent
-- [ ] Skills are one-shot: auto-deactivate after the assistant response completes
-- [ ] Instructions persist across turns until manually deactivated
-- [ ] Turso guard: all CRUD and load operations are no-ops when Turso is not configured
+- [x] DB migration v5: add `user_instructions`, `skills`, `custom_agents` tables to `runMigrations()`
+- [x] `lib/agent-repository.ts`: CRUD functions for all three tables (follow `turso-repository.ts` patterns)
+- [x] `store/agents.ts`: Zustand store with CRUD actions, active selections, and Turso load
+- [x] Settings > Agents tab with sub-tabs: Instructions, Skills, Custom Agents
+- [x] Instructions tab: list markdown files, create/edit/delete, "Set Active" toggle, content editor
+- [x] Skills tab: list skills (name + description + content), create/edit/delete
+- [x] Custom Agents tab: list agents (name + description + system prompt), create/edit/delete
+- [x] Slash command parser in `message-input.tsx` with autocomplete dropdown
+- [x] Active indicator chips in message input (show active instruction/skill/agent, allow clearing)
+- [x] Modify `useChat.sendMessage()` and `streamAssistantResponse()` to inject system messages from active instruction/skill/agent
+- [x] Skills are one-shot: auto-deactivate after the assistant response completes
+- [x] Instructions persist across turns until manually deactivated
+- [x] Turso guard: all CRUD and load operations are no-ops when Turso is not configured
 - [ ] Verify: create instruction, skill, agent with Turso configured; they persist across restart
 - [ ] Verify: skill triggers via `/skillname`, injects content, deactivates after response
 - [ ] Verify: instruction stays active across multiple messages until cleared
