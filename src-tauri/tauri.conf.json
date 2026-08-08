@@ -23,6 +23,27 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "copyright": "© 2026 Hadi. All rights reserved.",
+    "category": "Productivity",
+    "shortDescription": "A local-first AI chat desktop app with custom instructions, skills, and agents.",
+    "longDescription": "Personal Agent is a local-first AI chat desktop app that works with any OpenAI-compatible provider. Define custom instructions to control response formatting, create reusable skills for domain-specific knowledge, and build custom agents for different workflows. All conversations synced across devices via Turso.",
+    "macOS": {
+      "dmg": {
+        "background": "./icons/dmg-background.png",
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        },
+        "appPosition": {
+          "x": 140,
+          "y": 180
+        },
+        "applicationFolderPosition": {
+          "x": 420,
+          "y": 180
+        }
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
