@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageSquareIcon, SparklesIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useChat } from "#hooks/use-chat";
 import type { Conversation } from "#lib/types/chat";
@@ -23,7 +24,17 @@ export function MessageList({ conversation }: MessageListProps) {
   }, [conversation]);
 
   if (messages.length === 0) {
-    return null;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-8 text-center">
+        <div className="mb-4 flex size-12 items-center justify-center rounded-xl bg-muted">
+          <MessageSquareIcon className="size-6 text-muted-foreground" />
+        </div>
+        <h2 className="text-lg font-semibold text-foreground">Start a conversation</h2>
+        <p className="mt-2 max-w-sm text-sm text-muted-foreground">
+          Type a message below to begin chatting with your AI assistant.
+        </p>
+      </div>
+    );
   }
 
   return (

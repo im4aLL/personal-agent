@@ -1,30 +1,25 @@
 "use client";
 
-import { AlertCircleIcon, MessageSquareIcon, SparklesIcon } from "lucide-react";
-import { Link } from "react-router-dom";
-import { toast } from "sonner";
+import { AlertCircleIcon, MessageSquarePlusIcon, SettingsIcon, SparklesIcon } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "#components/ui/button";
 import type { ProviderInfo } from "#store/chat";
+import { useChatStore } from "#store/chat";
 
 interface EmptyStateProps {
   providers?: ProviderInfo[];
 }
 
-const SUGGESTIONS = [
-  "Explain a React hook",
-  "Plan a weekend trip",
-  "Debug a TypeScript error",
-  "Summarize an article",
-];
-
-function handleSuggestion(suggestion: string) {
-  toast("Coming soon", {
-    description: `"${suggestion}" is not implemented yet.`,
-  });
-}
-
 export function EmptyState({ providers }: EmptyStateProps) {
+  const navigate = useNavigate();
+  const createConversation = useChatStore((state) => state.createConversation);
+
   const hasProviders = providers && providers.length > 0;
+
+  function handleStartConversation() {
+    createConversation(true);
+    navigate("/");
+  }
 
   if (!hasProviders) {
     return (
@@ -105,21 +100,20 @@ export function EmptyState({ providers }: EmptyStateProps) {
       </div>
       <h1 className="text-2xl font-semibold text-foreground">Welcome to Personal Agent</h1>
       <p className="mt-2 max-w-sm text-muted-foreground">
-        Start a conversation below or pick a suggestion to get going.
+        Start a new conversation or go to Settings to configure your AI provider.
       </p>
 
-      <div className="mt-8 flex max-w-md flex-wrap justify-center gap-2">
-        {SUGGESTIONS.map((suggestion) => (
-          <Button
-            key={suggestion}
-            variant="outline"
-            size="sm"
-            onClick={() => handleSuggestion(suggestion)}
-          >
-            <MessageSquareIcon className="size-3.5" />
-            {suggestion}
-          </Button>
-        ))}
+      <div className="mt-8 flex gap-3">
+        <Button onClick={handleStartConversation}>
+          <MessageSquarePlusIcon className="size-4" />
+          Start Conversation
+        </Button>
+        <Button variant="outline" asChild>
+          <Link to="/settings">
+            <SettingsIcon className="size-4" />
+            Settings
+          </Link>
+        </Button>
       </div>
     </div>
   );
