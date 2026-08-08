@@ -130,7 +130,7 @@ export function MessageBubble({
               {message.reasoning && (
                 <ThinkingBlock
                   content={message.reasoning.content}
-                  defaultCollapsed={message.reasoning.isCollapsed ?? true}
+                  defaultCollapsed={isStreaming ? false : (message.reasoning.isCollapsed ?? true)}
                 />
               )}
               <Markdown className={cn("[&_p:last-child]:mb-0", isUser && "prose-invert")}>

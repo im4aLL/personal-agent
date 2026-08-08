@@ -4,12 +4,12 @@
 
 **Blocked by:** #6 - First real chat flow with send, stream, and stop
 
-**Status:** Ready For Dev
+**Status:** Done
 
-- [ ] Capture reasoning from SDK `fullStream` reasoning parts
-- [ ] Store reasoning into `message.reasoning` during streaming
-- [ ] Render reasoning via the existing collapsible thinking-block component
-- [ ] Ensure reasoning text is excluded from main message content
-- [ ] Verify: chat with a reasoning-capable model through a compatible endpoint
-- [ ] Verify: thinking streams live into the collapsible section, appears only there
-- [ ] Verify: reasoning persists with the message across reloads (once persistence is wired)
+- [x] Capture reasoning from SDK `fullStream` reasoning parts
+- [x] Store reasoning into `message.reasoning` during streaming
+- [x] Render reasoning via the existing collapsible thinking-block component
+- [x] Ensure reasoning text is excluded from main message content
+- [x] Verify: chat with a reasoning-capable model through a compatible endpoint
+- [x] Verify: thinking streams live into the collapsible section, appears only there
+- [x] Verify: reasoning persists with the message across reloads (once persistence is wired)

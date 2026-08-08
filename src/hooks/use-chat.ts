@@ -36,6 +36,7 @@ export function useChat() {
   const thinkingLevel = useChatStore((state) => state.thinkingLevel);
   const addMessage = useChatStore((state) => state.addMessage);
   const appendMessageContent = useChatStore((state) => state.appendMessageContent);
+  const appendMessageReasoning = useChatStore((state) => state.appendMessageReasoning);
   const setMessageStatus = useChatStore((state) => state.setMessageStatus);
   const setMessageError = useChatStore((state) => state.setMessageError);
   const setConversationTitle = useChatStore((state) => state.setConversationTitle);
@@ -97,14 +98,18 @@ export function useChat() {
         const model = provider(selectedModel.modelId);
         const messages = buildCoreMessages(contextMessages);
 
-        const { textStream } = streamText({
+        const { fullStream } = streamText({
           model,
           messages,
           abortSignal: abortControllerRef.current.signal,
         });
 
-        for await (const textDelta of textStream) {
-          appendMessageContent(conversationId, assistantMessage.id, textDelta);
+        for await (const part of fullStream) {
+          if (part.type === "text-delta") {
+            appendMessageContent(conversationId, assistantMessage.id, part.text);
+          } else if (part.type === "reasoning-delta") {
+            appendMessageReasoning(conversationId, assistantMessage.id, part.text);
+          }
         }
 
         setMessageStatus(conversationId, assistantMessage.id, "sent");
@@ -162,6 +167,7 @@ export function useChat() {
       thinkingLevel,
       addMessage,
       appendMessageContent,
+      appendMessageReasoning,
       setMessageStatus,
       setMessageError,
       setConversationTitle,

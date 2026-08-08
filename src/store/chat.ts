@@ -58,6 +58,7 @@ export type ChatState = {
   setConversationTitle: (id: string, title: string) => void;
   addMessage: (conversationId: string, message: Message) => void;
   appendMessageContent: (conversationId: string, messageId: string, delta: string) => void;
+  appendMessageReasoning: (conversationId: string, messageId: string, delta: string) => void;
   setMessageStatus: (conversationId: string, messageId: string, status: Message["status"]) => void;
   setMessageError: (conversationId: string, messageId: string, error: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
@@ -351,6 +352,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages: conversation.messages.map((message) =>
           message.id === messageId ? { ...message, content: message.content + delta } : message,
         ),
+      })),
+    }));
+  },
+
+  appendMessageReasoning: (conversationId, messageId, delta) => {
+    set((state) => ({
+      conversations: updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) => {
+          if (message.id !== messageId) {
+            return message;
+          }
+
+          const currentReasoning = message.reasoning?.content ?? "";
+          return {
+            ...message,
+            reasoning: { content: currentReasoning + delta },
+          };
+        }),
       })),
     }));
   },
