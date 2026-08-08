@@ -1,12 +1,13 @@
 "use client";
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import type { ImagePart, TextPart, UserContent } from "@ai-sdk/provider-utils";
 import { streamText } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { proxyFetch } from "#lib/ai";
 import { generateConversationTitle } from "#lib/title";
-import type { Message, MessageModelInfo } from "#lib/types/chat";
+import type { Attachment, Message, MessageModelInfo } from "#lib/types/chat";
 import {
   createMessageId,
   DEFAULT_CONVERSATION_TITLE,
@@ -50,18 +51,47 @@ function logProviderCall(details: {
   }
 }
 
-type CoreMessage = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
+const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
-function buildCoreMessages(messages: Message[]): CoreMessage[] {
+function buildUserContent(message: Message): UserContent {
+  const imageAttachments =
+    message.attachments?.filter((a) => a.data && IMAGE_MIME_TYPES.includes(a.type)) ?? [];
+
+  if (imageAttachments.length === 0) {
+    return message.content;
+  }
+
+  const parts: Array<TextPart | ImagePart> = [];
+
+  for (const attachment of imageAttachments) {
+    if (attachment.data) {
+      parts.push({ type: "image", image: attachment.data });
+    }
+  }
+
+  if (message.content.trim()) {
+    parts.push({ type: "text", text: message.content });
+  }
+
+  return parts;
+}
+
+function buildCoreMessages(messages: Message[]) {
   return messages
-    .filter((message) => message.role === "user" || message.role === "assistant")
-    .map((message) => ({
-      role: message.role as "user" | "assistant",
-      content: message.content,
-    }));
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((message) => {
+      if (message.role === "user") {
+        return {
+          role: "user" as const,
+          content: buildUserContent(message),
+        };
+      }
+
+      return {
+        role: "assistant" as const,
+        content: message.content,
+      };
+    });
 }
 
 export function useChat() {
@@ -183,9 +213,8 @@ export function useChat() {
             model,
             messages,
             abortSignal: abortControllerRef.current.signal,
-            reasoning: thinkingLevel !== "off"
-              ? (THINKING_TO_REASONING[thinkingLevel] ?? "medium")
-              : "none",
+            reasoning:
+              thinkingLevel !== "off" ? (THINKING_TO_REASONING[thinkingLevel] ?? "medium") : "none",
           });
 
           for await (const part of fullStream) {
@@ -290,13 +319,14 @@ export function useChat() {
   );
 
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, attachments?: Attachment[]) => {
       if (!activeProvider) {
         return;
       }
 
       const trimmed = content.trim();
-      if (!trimmed) {
+      const hasAttachments = attachments && attachments.length > 0;
+      if (!trimmed && !hasAttachments) {
         return;
       }
 
@@ -309,6 +339,7 @@ export function useChat() {
         id: createMessageId(),
         role: "user",
         content: trimmed,
+        attachments: hasAttachments ? attachments : undefined,
         createdAt: new Date(),
       };
 

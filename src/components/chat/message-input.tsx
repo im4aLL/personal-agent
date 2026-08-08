@@ -4,9 +4,12 @@ import {
   ArrowUpIcon,
   BrainIcon,
   ChevronDownIcon,
+  FileTextIcon,
+  ImageIcon,
   Loader2Icon,
   PaperclipIcon,
   SquareIcon,
+  XIcon,
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -32,9 +35,65 @@ import {
 } from "#components/ui/dropdown-menu";
 import { Textarea } from "#components/ui/textarea";
 import { useChat } from "#hooks/use-chat";
+import type { Attachment } from "#lib/types/chat";
 import { useChatStore } from "#store/chat";
 
 const MAX_MESSAGE_LENGTH = 50000;
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+
+function createAttachmentId(): string {
+  return `att-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function readFileAsAttachment(file: File): Promise<Attachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      resolve({
+        id: createAttachmentId(),
+        name: file.name,
+        type: file.type || "application/octet-stream",
+        size: file.size,
+        data: reader.result as string,
+      });
+    };
+
+    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+
+    if (IMAGE_MIME_TYPES.includes(file.type)) {
+      reader.readAsDataURL(file);
+    } else {
+      reader.readAsText(file);
+    }
+  });
+}
+
+async function blobToAttachment(blob: Blob, name: string): Promise<Attachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      resolve({
+        id: createAttachmentId(),
+        name,
+        type: blob.type || "image/png",
+        size: blob.size,
+        data: reader.result as string,
+      });
+    };
+
+    reader.onerror = () => reject(new Error("Failed to read pasted image"));
+    reader.readAsDataURL(blob);
+  });
+}
 
 const THINKING_OPTIONS = [
   { value: "off", label: "Off" },
@@ -99,9 +158,7 @@ function ModelSelector() {
   const visibleProviderIds = useMemo(
     () =>
       providers
-        .filter((provider) =>
-          filteredOptions.some((option) => option.providerId === provider.id),
-        )
+        .filter((provider) => filteredOptions.some((option) => option.providerId === provider.id))
         .map((provider) => provider.id),
     [providers, filteredOptions],
   );
@@ -165,9 +222,7 @@ function ModelSelector() {
 
               if (provider.modelsError) {
                 return (
-                  <ComboboxEmpty key={providerId}>
-                    Error: {provider.modelsError}
-                  </ComboboxEmpty>
+                  <ComboboxEmpty key={providerId}>Error: {provider.modelsError}</ComboboxEmpty>
                 );
               }
 
@@ -227,11 +282,13 @@ function ThinkingSelector() {
 
 export function MessageInput() {
   const [value, setValue] = useState("");
+  const [attachments, setAttachments] = useState<Attachment[]>([]);
   const { sendMessage, stop, isGenerating, canSend, isOffline } = useChat();
   const selectedModel = useChatStore((state) => state.selectedModel);
   const disabledModels = useChatStore((state) => state.disabledModels);
   const providers = useChatStore((state) => state.providers);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeProvider = useMemo(
     () => providers.find((p) => p.id === selectedModel.providerId),
@@ -279,15 +336,18 @@ export function MessageInput() {
 
   function handleSend() {
     const trimmed = value.trim();
-    if (!trimmed || isGenerating || !canSend) return;
+    const hasAttachments = attachments.length > 0;
+    if ((!trimmed && !hasAttachments) || isGenerating || !canSend) return;
     if (trimmed.length > MAX_MESSAGE_LENGTH) {
       toast.error("Message too long", {
         description: `Messages are limited to ${MAX_MESSAGE_LENGTH.toLocaleString()} characters.`,
       });
       return;
     }
+    const currentAttachments = [...attachments];
     setValue("");
-    void sendMessage(trimmed);
+    setAttachments([]);
+    void sendMessage(trimmed, currentAttachments.length > 0 ? currentAttachments : undefined);
   }
 
   function handleStop() {
@@ -305,21 +365,127 @@ export function MessageInput() {
     }
   }
 
-  function handleAttach() {
-    toast("Coming soon", {
-      description: "Attachments are not implemented yet.",
-    });
+  function handleAttachClick() {
+    fileInputRef.current?.click();
   }
+
+  async function handleFilesSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    const newAttachments: Attachment[] = [];
+
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`File too large: ${file.name}`, {
+          description: `Maximum file size is ${formatFileSize(MAX_FILE_SIZE)}.`,
+        });
+        continue;
+      }
+
+      try {
+        const attachment = await readFileAsAttachment(file);
+        newAttachments.push(attachment);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to read file";
+        toast.error(message);
+      }
+    }
+
+    if (newAttachments.length > 0) {
+      setAttachments((prev) => [...prev, ...newAttachments]);
+    }
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  function removeAttachment(id: string) {
+    setAttachments((prev) => prev.filter((a) => a.id !== id));
+  }
+
+  async function handlePaste(event: React.ClipboardEvent<HTMLTextAreaElement>) {
+    const items = event.clipboardData?.items;
+    if (!items) return;
+
+    for (const item of items) {
+      if (item.type.startsWith("image/")) {
+        event.preventDefault();
+        const blob = item.getAsFile();
+        if (!blob) continue;
+
+        if (blob.size > MAX_FILE_SIZE) {
+          toast.error("Pasted image too large", {
+            description: `Maximum file size is ${formatFileSize(MAX_FILE_SIZE)}.`,
+          });
+          continue;
+        }
+
+        try {
+          const name = `pasted-image.${item.type.split("/")[1] || "png"}`;
+          const attachment = await blobToAttachment(blob, name);
+          setAttachments((prev) => [...prev, attachment]);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "Failed to paste image";
+          toast.error(message);
+        }
+      }
+    }
+  }
+
+  const hasAttachments = attachments.length > 0;
 
   return (
     <div className="border-t bg-background px-4 py-4">
       <div className="relative flex flex-col rounded-2xl border bg-background p-3 dark:bg-transparent">
+        {hasAttachments && (
+          <div className="flex flex-wrap gap-2 px-4 pb-3">
+            {attachments.map((attachment) => (
+              <div
+                key={attachment.id}
+                className="group/attachment relative flex items-center gap-3 rounded-lg border bg-muted/50 py-2 pl-3 pr-8 text-xs"
+              >
+                {IMAGE_MIME_TYPES.includes(attachment.type) && attachment.data ? (
+                  <img
+                    src={attachment.data}
+                    alt={attachment.name}
+                    className="size-10 rounded object-cover"
+                  />
+                ) : (
+                  <div className="flex size-10 items-center justify-center rounded bg-muted">
+                    {attachment.type.startsWith("image/") ? (
+                      <ImageIcon className="size-5 text-muted-foreground" />
+                    ) : (
+                      <FileTextIcon className="size-5 text-muted-foreground" />
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-col min-w-0">
+                  <span className="max-w-36 truncate font-medium">{attachment.name}</span>
+                  <span className="text-muted-foreground">{formatFileSize(attachment.size)}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="absolute right-1 top-1 size-5 rounded-full opacity-0 group-hover/attachment:opacity-100"
+                  aria-label={`Remove ${attachment.name}`}
+                  onClick={() => removeAttachment(attachment.id)}
+                >
+                  <XIcon className="size-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <Textarea
             placeholder={placeholder}
             value={value}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             rows={1}
             ref={textareaRef}
             className="max-h-60 min-h-12 resize-none border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
@@ -343,7 +509,7 @@ export function MessageInput() {
                 type="button"
                 size="icon-sm"
                 aria-label="Send message"
-                disabled={!value.trim() || !canSend}
+                disabled={(!value.trim() && !hasAttachments) || !canSend}
                 onClick={handleSend}
               >
                 <ArrowUpIcon className="size-4" />
@@ -352,12 +518,20 @@ export function MessageInput() {
           </div>
         </div>
         <div className="flex items-center gap-1 px-1 pt-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={handleFilesSelected}
+            accept="image/*,.txt,.csv,.json,.xml,.html,.css,.js,.ts,.tsx,.jsx,.md,.yaml,.yml,.toml,.ini,.cfg,.log,.env"
+          />
           <Button
             type="button"
             variant="ghost"
             size="icon"
             aria-label="Attach file"
-            onClick={handleAttach}
+            onClick={handleAttachClick}
           >
             <PaperclipIcon className="size-4" />
           </Button>

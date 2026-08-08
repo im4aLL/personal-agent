@@ -14,6 +14,14 @@ export type MessageModelInfo = {
   modelName: string;
 };
 
+export type Attachment = {
+  id: string;
+  name: string;
+  type: string;
+  size: number;
+  data?: string;
+};
+
 export type Message = {
   id: string;
   role: MessageRole;
@@ -25,6 +33,7 @@ export type Message = {
   createdAt: Date;
   model?: MessageModelInfo;
   thinkingLevel?: string;
+  attachments?: Attachment[];
 };
 
 export type Conversation = {

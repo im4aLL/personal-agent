@@ -4,6 +4,8 @@ import {
   AlertCircleIcon,
   BotIcon,
   CopyIcon,
+  FileTextIcon,
+  ImageIcon,
   Loader2Icon,
   PencilIcon,
   RefreshCwIcon,
@@ -133,6 +135,33 @@ export function MessageBubble({
                   content={message.reasoning.content}
                   defaultCollapsed={isStreaming ? false : (message.reasoning.isCollapsed ?? true)}
                 />
+              )}
+              {isUser && message.attachments && message.attachments.length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-2">
+                  {message.attachments.map((attachment) => (
+                    <div
+                      key={attachment.id}
+                      className="flex items-center gap-2 rounded-md bg-black/10 dark:bg-white/10 px-2 py-1 text-xs"
+                    >
+                      {attachment.type.startsWith("image/") && attachment.data ? (
+                        <img
+                          src={attachment.data}
+                          alt={attachment.name}
+                          className="size-8 rounded object-cover"
+                        />
+                      ) : (
+                        <div className="flex size-8 items-center justify-center rounded bg-black/20 dark:bg-white/20">
+                          {attachment.type.startsWith("image/") ? (
+                            <ImageIcon className="size-4" />
+                          ) : (
+                            <FileTextIcon className="size-4" />
+                          )}
+                        </div>
+                      )}
+                      <span className="max-w-40 truncate">{attachment.name}</span>
+                    </div>
+                  ))}
+                </div>
               )}
               <Markdown className={cn("[&_p:last-child]:mb-0", isUser && "prose-invert")}>
                 {message.content}
