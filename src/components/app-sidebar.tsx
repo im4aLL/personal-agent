@@ -24,6 +24,8 @@ import { Input } from "#components/ui/input";
 import { searchConversations } from "#lib/search";
 import type { Conversation } from "#lib/types/chat";
 import { useChatStore } from "#store/chat";
+import { version } from "../../package.json";
+import { PersonalAgentLogo } from "./personal-agent-logo";
 import { ThemeToggle } from "./theme-toggle";
 import {
   Sidebar,
@@ -178,6 +180,13 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
+        <Link to="/" className="flex items-center gap-2 px-2 py-1 group-data-[collapsible=icon]:justify-center">
+          <PersonalAgentLogo className="size-10 shrink-0 group-data-[collapsible=icon]:size-8" />
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
+            <span className="text-sm font-semibold leading-tight">Personal Agent</span>
+            <span className="text-xs text-muted-foreground leading-tight">v{version}</span>
+          </div>
+        </Link>
         <div className="px-2 group-data-[collapsible=icon]:hidden">
           <div className="relative">
             <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
@@ -302,8 +311,8 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <div className="flex items-center gap-1">
-          <SidebarMenu className="flex-1">
+        <div className="flex items-center gap-1 group-data-[collapsible=icon]:justify-center">
+          <SidebarMenu className="flex-1 group-data-[collapsible=icon]:flex-none">
             <SidebarMenuItem>
               <SidebarMenuButton
                 tooltip="Settings"
@@ -317,7 +326,9 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
-          <ThemeToggle />
+          <div className="group-data-[collapsible=icon]:hidden">
+            <ThemeToggle />
+          </div>
         </div>
       </SidebarFooter>
 

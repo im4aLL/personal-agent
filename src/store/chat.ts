@@ -131,19 +131,6 @@ function parseManualModels(value: string | undefined): ModelInfo[] {
     .map((id) => ({ id, name: id }));
 }
 
-function buildPresetProviders(): ProviderInfo[] {
-  return PROVIDER_PRESETS.map((preset, index) => ({
-    id: createProviderId(preset.label),
-    name: createProviderName(preset.label),
-    label: preset.label,
-    baseUrl: preset.baseUrl,
-    apiKey: preset.apiKey,
-    isDefault: index === 0,
-    connectionMode: preset.connectionMode,
-    models: [],
-  }));
-}
-
 function loadProviderState(): ProviderInfo[] {
   const stored = loadProviders();
   if (stored && stored.length > 0) {
@@ -155,7 +142,7 @@ function loadProviderState(): ProviderInfo[] {
     }));
   }
 
-  return buildPresetProviders();
+  return [];
 }
 
 function loadModelSelection(): { providerId: string; modelId: string } {

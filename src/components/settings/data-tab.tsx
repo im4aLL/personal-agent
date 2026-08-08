@@ -8,6 +8,7 @@ import { Input } from "#components/ui/input";
 import { Label } from "#components/ui/label";
 import { clearTursoConfig, loadTursoToken, loadTursoUrl, saveTursoConfig } from "#lib/config";
 import { getTursoConfig, tursoSelect } from "#lib/turso";
+import { useChatStore } from "#store/chat";
 
 type ConnectionStatus = "idle" | "checking" | "connected" | "failed";
 
@@ -64,6 +65,8 @@ export function DataTab() {
 
   const isValid = Boolean(url.trim() && token.trim() && !urlError && !tokenError);
 
+  const loadHistory = useChatStore((state) => state.loadHistory);
+
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
     setTouched({ url: true, token: true });
@@ -73,6 +76,7 @@ export function DataTab() {
       description: "Database credentials have been stored.",
     });
     setStatus("idle");
+    void loadHistory();
   }
 
   function handleClear() {
