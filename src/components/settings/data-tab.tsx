@@ -72,11 +72,30 @@ export function DataTab() {
 
   useEffect(() => {
     if (!initialized) return;
-    if (url && token) {
+    if (!url || !token) {
       setStatus("idle");
-    } else {
-      setStatus("idle");
+      return;
     }
+    // Auto-check connection when saved credentials exist
+    let cancelled = false;
+    async function check() {
+      setStatus("checking");
+      try {
+        const config = getTursoConfig();
+        if (!config) {
+          if (!cancelled) setStatus("failed");
+          return;
+        }
+        await tursoSelect("SELECT 1");
+        if (!cancelled) setStatus("connected");
+      } catch {
+        if (!cancelled) setStatus("failed");
+      }
+    }
+    void check();
+    return () => {
+      cancelled = true;
+    };
   }, [url, token, initialized]);
 
   useEffect(() => {
