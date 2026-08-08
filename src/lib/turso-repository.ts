@@ -1,4 +1,4 @@
-import type { Conversation, Message } from "#lib/types/chat";
+import type { Conversation, ConversationSummary, Message } from "#lib/types/chat";
 import { getTursoConfig, tursoExecute, tursoExecuteMany, tursoSelect } from "./turso";
 
 interface TursoConversationRow {
@@ -139,6 +139,52 @@ export async function runMigrations(): Promise<void> {
   }
 }
 
+function parseTags(tags: string | null): string[] {
+  if (!tags) return [];
+  try {
+    const parsed = JSON.parse(tags);
+    if (Array.isArray(parsed) && parsed.every((t) => typeof t === "string")) {
+      return parsed;
+    }
+  } catch {
+    // Ignore malformed JSON.
+  }
+  return [];
+}
+
+function mapRowToSummary(row: TursoConversationRow): ConversationSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    pinned: row.pinned === 1,
+    tags: parseTags(row.tags),
+    createdAt: new Date(row.created_at),
+    updatedAt: new Date(row.updated_at),
+  };
+}
+
+function mapRowToMessage(row: TursoMessageRow): Message {
+  return {
+    id: row.id,
+    role: row.role as Message["role"],
+    content: row.content,
+    reasoning: row.reasoning ? { content: row.reasoning } : undefined,
+    status: (row.status as Message["status"]) ?? undefined,
+    error: row.error ?? undefined,
+    editedAt: row.edited_at ? new Date(row.edited_at) : undefined,
+    createdAt: new Date(row.created_at),
+    model: row.model_provider_id
+      ? {
+          providerId: row.model_provider_id,
+          providerName: row.model_provider_name ?? "",
+          modelId: row.model_id ?? "",
+          modelName: row.model_name ?? "",
+        }
+      : undefined,
+    thinkingLevel: row.thinking_level ?? undefined,
+  };
+}
+
 export async function loadConversations(): Promise<Conversation[]> {
   const config = getTursoConfig();
   if (!config) return [];
@@ -150,58 +196,103 @@ export async function loadConversations(): Promise<Conversation[]> {
   const conversations: Conversation[] = [];
 
   for (const row of convRows) {
-    const msgRows = await tursoSelect<TursoMessageRow>(
-      "SELECT id, conversation_id, role, content, reasoning, status, error, edited_at, created_at, model_provider_id, model_provider_name, model_id, model_name, thinking_level FROM messages WHERE conversation_id = ? ORDER BY created_at ASC",
-      [row.id],
-    );
-
-    const messages: Message[] = msgRows.map((m) => ({
-      id: m.id,
-      role: m.role as Message["role"],
-      content: m.content,
-      reasoning: m.reasoning ? { content: m.reasoning } : undefined,
-      status: (m.status as Message["status"]) ?? undefined,
-      error: m.error ?? undefined,
-      editedAt: m.edited_at ? new Date(m.edited_at) : undefined,
-      createdAt: new Date(m.created_at),
-      model: m.model_provider_id
-        ? {
-            providerId: m.model_provider_id,
-            providerName: m.model_provider_name ?? "",
-            modelId: m.model_id ?? "",
-            modelName: m.model_name ?? "",
-          }
-        : undefined,
-      thinkingLevel: m.thinking_level ?? undefined,
-    }));
-
-    let tags: string[] = [];
-    if (row.tags) {
-      try {
-        const parsed = JSON.parse(row.tags);
-        if (Array.isArray(parsed) && parsed.every((t) => typeof t === "string")) {
-          tags = parsed;
-        }
-      } catch {
-        // Ignore malformed JSON.
-      }
-    }
+    const messages = await loadMessages(row.id);
 
     conversations.push({
-      id: row.id,
-      title: row.title,
+      ...mapRowToSummary(row),
       messages,
-      pinned: row.pinned === 1,
-      tags,
-      createdAt: new Date(row.created_at),
-      updatedAt: new Date(row.updated_at),
     });
   }
 
   return conversations;
 }
 
-export async function saveConversation(conversation: Conversation): Promise<void> {
+export async function loadConversationSummaries(): Promise<{
+  pinned: ConversationSummary[];
+  today: ConversationSummary[];
+  yesterday: ConversationSummary[];
+  previous7Days: ConversationSummary[];
+  monthGroups: { month: string; label: string; count: number }[];
+}> {
+  const config = getTursoConfig();
+  if (!config) {
+    return { pinned: [], today: [], yesterday: [], previous7Days: [], monthGroups: [] };
+  }
+
+  const [pinnedRows, todayRows, yesterdayRows, previous7DaysRows, monthRows] = await Promise.all([
+    tursoSelect<TursoConversationRow>(
+      "SELECT id, title, pinned, tags, created_at, updated_at FROM conversations WHERE pinned = 1 ORDER BY updated_at DESC",
+    ),
+    tursoSelect<TursoConversationRow>(
+      "SELECT id, title, pinned, tags, created_at, updated_at FROM conversations WHERE date(updated_at) = date('now') AND pinned = 0 ORDER BY updated_at DESC",
+    ),
+    tursoSelect<TursoConversationRow>(
+      "SELECT id, title, pinned, tags, created_at, updated_at FROM conversations WHERE date(updated_at) = date('now', '-1 day') AND pinned = 0 ORDER BY updated_at DESC",
+    ),
+    tursoSelect<TursoConversationRow>(
+      "SELECT id, title, pinned, tags, created_at, updated_at FROM conversations WHERE updated_at >= date('now', '-7 days') AND updated_at < date('now', '-1 day') AND pinned = 0 ORDER BY updated_at DESC",
+    ),
+    tursoSelect<{ month: string; count: number }>(
+      "SELECT strftime('%Y-%m', updated_at) as month, COUNT(*) as count FROM conversations WHERE updated_at < date('now', '-7 days') AND pinned = 0 GROUP BY month ORDER BY month DESC",
+    ),
+  ]);
+
+  const monthGroups = monthRows.map((row) => ({
+    month: row.month,
+    label: new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long" }).format(
+      new Date(`${row.month}-01`),
+    ),
+    count: row.count,
+  }));
+
+  return {
+    pinned: pinnedRows.map(mapRowToSummary),
+    today: todayRows.map(mapRowToSummary),
+    yesterday: yesterdayRows.map(mapRowToSummary),
+    previous7Days: previous7DaysRows.map(mapRowToSummary),
+    monthGroups,
+  };
+}
+
+export async function loadConversationsForMonth(
+  month: string,
+  limit: number,
+): Promise<ConversationSummary[]> {
+  const config = getTursoConfig();
+  if (!config) return [];
+
+  const startDate = `${month}-01`;
+  const [year, mon] = month.split("-").map(Number);
+  const nextMonth =
+    mon === 12 ? `${year + 1}-01-01` : `${year}-${String(mon + 1).padStart(2, "0")}-01`;
+
+  const rows = await tursoSelect<TursoConversationRow>(
+    `SELECT id, title, pinned, tags, created_at, updated_at
+     FROM conversations WHERE updated_at >= ? AND updated_at < ? AND pinned = 0
+     ORDER BY updated_at DESC LIMIT ?`,
+    [startDate, nextMonth, limit],
+  );
+
+  return rows.map(mapRowToSummary);
+}
+
+export async function loadMessages(conversationId: string): Promise<Message[]> {
+  const config = getTursoConfig();
+  if (!config) return [];
+
+  const msgRows = await tursoSelect<TursoMessageRow>(
+    `SELECT id, conversation_id, role, content, reasoning, status, error, edited_at, created_at,
+            model_provider_id, model_provider_name, model_id, model_name, thinking_level
+     FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`,
+    [conversationId],
+  );
+
+  return msgRows.map(mapRowToMessage);
+}
+
+export async function saveConversation(
+  conversation: ConversationSummary & { messages?: Message[] },
+): Promise<void> {
   const requests: Array<{ sql: string; args: unknown[] }> = [
     {
       sql: `INSERT OR REPLACE INTO conversations (id, title, pinned, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -216,39 +307,44 @@ export async function saveConversation(conversation: Conversation): Promise<void
     },
   ];
 
-  for (const message of conversation.messages) {
-    const reasoningValue = message.reasoning?.content ?? null;
-    const statusValue = message.status ?? null;
-    const errorValue = message.error ?? null;
-    const editedAtValue = message.editedAt?.toISOString() ?? null;
-    const modelProviderId = message.model?.providerId ?? null;
-    const modelProviderName = message.model?.providerName ?? null;
-    const modelId = message.model?.modelId ?? null;
-    const modelName = message.model?.modelName ?? null;
-    const thinkingLevel = message.thinkingLevel ?? null;
+  // Only persist messages when they are present and non-empty.
+  // An empty or undefined messages array means messages are not loaded yet,
+  // so we update only the conversation row without touching messages.
+  if (conversation.messages !== undefined && conversation.messages.length > 0) {
+    for (const message of conversation.messages) {
+      const reasoningValue = message.reasoning?.content ?? null;
+      const statusValue = message.status ?? null;
+      const errorValue = message.error ?? null;
+      const editedAtValue = message.editedAt?.toISOString() ?? null;
+      const modelProviderId = message.model?.providerId ?? null;
+      const modelProviderName = message.model?.providerName ?? null;
+      const modelId = message.model?.modelId ?? null;
+      const modelName = message.model?.modelName ?? null;
+      const thinkingLevel = message.thinkingLevel ?? null;
 
-    requests.push({
-      sql: `INSERT OR REPLACE INTO messages (
-        id, conversation_id, role, content, reasoning, status, error, edited_at, created_at,
-        model_provider_id, model_provider_name, model_id, model_name, thinking_level
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      args: [
-        message.id,
-        conversation.id,
-        message.role,
-        message.content,
-        reasoningValue,
-        statusValue,
-        errorValue,
-        editedAtValue,
-        message.createdAt.toISOString(),
-        modelProviderId,
-        modelProviderName,
-        modelId,
-        modelName,
-        thinkingLevel,
-      ],
-    });
+      requests.push({
+        sql: `INSERT OR REPLACE INTO messages (
+          id, conversation_id, role, content, reasoning, status, error, edited_at, created_at,
+          model_provider_id, model_provider_name, model_id, model_name, thinking_level
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          message.id,
+          conversation.id,
+          message.role,
+          message.content,
+          reasoningValue,
+          statusValue,
+          errorValue,
+          editedAtValue,
+          message.createdAt.toISOString(),
+          modelProviderId,
+          modelProviderName,
+          modelId,
+          modelName,
+          thinkingLevel,
+        ],
+      });
+    }
   }
 
   await tursoExecuteMany(requests);
@@ -305,9 +401,9 @@ export async function truncateMessages(conversationId: string, messageId: string
   ]);
 }
 
-export async function searchConversations(query: string): Promise<Conversation[]> {
+export async function searchConversations(query: string): Promise<ConversationSummary[]> {
   const config = getTursoConfig();
-  if (!config || !query.trim()) return loadConversations();
+  if (!config || !query.trim()) return [];
 
   const likeQuery = `%${query.trim()}%`;
 
@@ -318,29 +414,7 @@ export async function searchConversations(query: string): Promise<Conversation[]
     [likeQuery, likeQuery],
   );
 
-  return convRows.map((row) => {
-    let tags: string[] = [];
-    if (row.tags) {
-      try {
-        const parsed = JSON.parse(row.tags);
-        if (Array.isArray(parsed) && parsed.every((t) => typeof t === "string")) {
-          tags = parsed;
-        }
-      } catch {
-        // Ignore malformed JSON.
-      }
-    }
-
-    return {
-      id: row.id,
-      title: row.title,
-      messages: [],
-      pinned: row.pinned === 1,
-      tags,
-      createdAt: new Date(row.created_at),
-      updatedAt: new Date(row.updated_at),
-    };
-  });
+  return convRows.map(mapRowToSummary);
 }
 
 export async function deleteMessage(messageId: string): Promise<void> {

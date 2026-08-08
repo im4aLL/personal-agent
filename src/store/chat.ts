@@ -19,13 +19,15 @@ import { getTursoConfig } from "#lib/turso";
 import {
   deleteConversation as deleteConversationRemote,
   deleteMessage as deleteMessageRemote,
-  loadConversations as loadConversationsRemote,
+  loadConversationSummaries,
+  loadConversationsForMonth,
+  loadMessages as loadMessagesRemote,
   runMigrations,
   saveConversation,
   saveMessage,
   truncateMessages,
 } from "#lib/turso-repository";
-import type { Conversation, Message, MessageModelInfo } from "#lib/types/chat";
+import type { Conversation, ConversationSummary, Message, MessageModelInfo } from "#lib/types/chat";
 import { applyMessageEdit, regenerateMessages } from "./chat-helpers";
 
 export type { ConnectionMode, ProviderInput };
@@ -48,6 +50,8 @@ export type ProviderInfo = {
 
 export const DEFAULT_CONVERSATION_TITLE = "New chat";
 
+export type MonthGroup = { month: string; label: string; count: number };
+
 export type ChatState = {
   conversations: Conversation[];
   selectedConversationId: string | null;
@@ -57,6 +61,10 @@ export type ChatState = {
   isHistoryLoaded: boolean;
   isHistoryLoading: boolean;
   historyError: string | null;
+  messagesLoading: Set<string>;
+  loadedConversationIds: Set<string>;
+  monthGroups: MonthGroup[];
+  monthConversations: Record<string, ConversationSummary[]>;
   providerSyncEnabled: boolean;
   providerSyncKey: CryptoKey | null;
   providerSyncStatus: SyncStatus;
@@ -84,6 +92,8 @@ export type ChatState = {
   editMessage: (conversationId: string, messageId: string, content: string) => void;
   persistConversation: (conversationId: string) => void;
   loadHistory: () => Promise<void>;
+  loadMessagesForConversation: (conversationId: string) => Promise<void>;
+  loadMonthConversations: (month: string) => Promise<void>;
   addProvider: (input: ProviderInput) => void;
   updateProvider: (id: string, input: ProviderInput) => void;
   deleteProvider: (id: string) => void;
@@ -342,6 +352,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isHistoryLoaded: false,
   isHistoryLoading: false,
   historyError: null,
+  messagesLoading: new Set(),
+  loadedConversationIds: new Set(),
+  monthGroups: [],
+  monthConversations: {},
   providerSyncEnabled: providerStorage.isProviderSyncEnabled(),
   providerSyncKey: null,
   providerSyncStatus: "never-synced",
@@ -350,7 +364,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
   providerSyncPending: false,
   disabledModels: initialDisabledModels,
 
-  selectConversation: (id) => set({ selectedConversationId: id }),
+  selectConversation: (id) => {
+    set({ selectedConversationId: id });
+    if (id && !get().loadedConversationIds.has(id)) {
+      void get().loadMessagesForConversation(id);
+    }
+  },
 
   createConversation: (selectAfterCreate = false) => {
     const id = createConversationId();
@@ -367,6 +386,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((state) => ({
       conversations: [newConversation, ...state.conversations],
       selectedConversationId: selectAfterCreate ? id : state.selectedConversationId,
+      loadedConversationIds: new Set([...state.loadedConversationIds, id]),
     }));
 
     return id;
@@ -418,6 +438,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return {
         conversations: nextConversations,
         selectedConversationId: nextSelectedId,
+        loadedConversationIds: (() => {
+          const next = new Set(state.loadedConversationIds);
+          next.delete(id);
+          return next;
+        })(),
+        messagesLoading: (() => {
+          const next = new Set(state.messagesLoading);
+          next.delete(id);
+          return next;
+        })(),
       };
     });
   },
@@ -560,7 +590,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   persistConversation: (conversationId) => {
     if (!isTursoConfigured()) return;
-    const conversation = get().conversations.find((c) => c.id === conversationId);
+    const state = get();
+    if (!state.loadedConversationIds.has(conversationId)) {
+      // Conversation messages not loaded yet - skipping persist to avoid data loss.
+      return;
+    }
+    const conversation = state.conversations.find((c) => c.id === conversationId);
     if (conversation) {
       void saveConversation(conversation);
     }
@@ -576,25 +611,150 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
 
       await runMigrations();
-      const loaded = await loadConversationsRemote();
-      set({ conversations: loaded, isHistoryLoaded: true, isHistoryLoading: false });
+      const summaries = await loadConversationSummaries();
+
+      // Merge pinned + today + yesterday + previous7Days into a flat conversations array.
+      // Each conversation gets an empty messages array - messages load lazily on select.
+      const allSummaries = [
+        ...summaries.pinned,
+        ...summaries.today,
+        ...summaries.yesterday,
+        ...summaries.previous7Days,
+      ];
+
+      const conversations: Conversation[] = allSummaries.map((summary) => ({
+        ...summary,
+        messages: [],
+      }));
+
+      set({
+        conversations,
+        monthGroups: summaries.monthGroups,
+        isHistoryLoaded: true,
+        isHistoryLoading: false,
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load history";
       set({ historyError: message, isHistoryLoaded: true, isHistoryLoading: false });
     }
   },
 
+  loadMessagesForConversation: async (conversationId) => {
+    const state = get();
+
+    // Already loaded or already loading.
+    if (
+      state.loadedConversationIds.has(conversationId) ||
+      state.messagesLoading.has(conversationId)
+    ) {
+      return;
+    }
+
+    set({ messagesLoading: new Set([...state.messagesLoading, conversationId]) });
+
+    try {
+      const messages = await loadMessagesRemote(conversationId);
+
+      set((currentState) => {
+        const existing = currentState.conversations.find((c) => c.id === conversationId);
+        const nextConversations = existing
+          ? currentState.conversations.map((c) =>
+              c.id === conversationId ? { ...c, messages } : c,
+            )
+          : [
+              ...currentState.conversations,
+              {
+                id: conversationId,
+                title: "Unknown",
+                messages,
+                pinned: false,
+                tags: [],
+                createdAt: new Date(),
+                updatedAt: new Date(),
+              },
+            ];
+
+        return {
+          conversations: nextConversations,
+          loadedConversationIds: new Set([...currentState.loadedConversationIds, conversationId]),
+          messagesLoading: (() => {
+            const next = new Set(currentState.messagesLoading);
+            next.delete(conversationId);
+            return next;
+          })(),
+        };
+      });
+    } catch {
+      // Remove from loading set on error.
+      set((currentState) => ({
+        messagesLoading: (() => {
+          const next = new Set(currentState.messagesLoading);
+          next.delete(conversationId);
+          return next;
+        })(),
+      }));
+    }
+  },
+
+  loadMonthConversations: async (month) => {
+    const state = get();
+
+    // Already loaded.
+    if (state.monthConversations[month]) return;
+
+    try {
+      const summaries = await loadConversationsForMonth(month, 50);
+
+      // Convert summaries to full Conversation objects (with empty messages).
+      const conversations: Conversation[] = summaries.map((s) => ({ ...s, messages: [] }));
+
+      set((currentState) => {
+        // Deduplicate: skip conversations already in the array (e.g., added via search fallback).
+        const existingIds = new Set(currentState.conversations.map((c) => c.id));
+        const newConversations = conversations.filter((c) => !existingIds.has(c.id));
+
+        return {
+          conversations: [...currentState.conversations, ...newConversations],
+          monthConversations: {
+            ...currentState.monthConversations,
+            [month]: summaries,
+          },
+        };
+      });
+    } catch {
+      // Silently fail - month group stays collapsed.
+    }
+  },
+
   regenerate: (conversationId) => {
-    set((state) => ({
-      conversations: updateConversation(state, conversationId, (conversation) => ({
-        ...conversation,
-        messages: regenerateMessages(conversation.messages),
-      })),
-    }));
+    set((state) => {
+      if (!state.loadedConversationIds.has(conversationId)) {
+        // Messages not loaded yet - nothing to regenerate.
+        return {};
+      }
+
+      const conversation = state.conversations.find((c) => c.id === conversationId);
+      if (!conversation || conversation.messages.length === 0) {
+        return {};
+      }
+
+      return {
+        conversations: updateConversation(state, conversationId, (conversation) => ({
+          ...conversation,
+          messages: regenerateMessages(conversation.messages),
+        })),
+      };
+    });
   },
 
   editMessage: (conversationId, messageId, content) => {
     set((state) => {
+      const conversation = state.conversations.find((c) => c.id === conversationId);
+      if (!conversation || !state.loadedConversationIds.has(conversationId)) {
+        // Messages not loaded yet - cannot edit.
+        return {};
+      }
+
       if (isTursoConfigured()) {
         void (async () => {
           await truncateMessages(conversationId, messageId);

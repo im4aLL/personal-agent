@@ -36,6 +36,8 @@ export type Message = {
   attachments?: Attachment[];
 };
 
+export type ConversationSummary = Omit<Conversation, "messages">;
+
 export type Conversation = {
   id: string;
   title: string;

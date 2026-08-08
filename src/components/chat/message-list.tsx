@@ -1,9 +1,10 @@
 "use client";
 
-import { MessageSquareIcon } from "lucide-react";
+import { Loader2Icon, MessageSquareIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useChat } from "#hooks/use-chat";
 import type { Conversation } from "#lib/types/chat";
+import { useChatStore } from "#store/chat";
 import { MessageBubble } from "./message-bubble";
 
 interface MessageListProps {
@@ -14,6 +15,7 @@ export function MessageList({ conversation }: MessageListProps) {
   const { retry, regenerate, editMessage, isGenerating } = useChat();
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const isMessagesLoading = useChatStore((state) => state.messagesLoading.has(conversation.id));
 
   const messages = conversation.messages;
 
@@ -22,6 +24,14 @@ export function MessageList({ conversation }: MessageListProps) {
     if (!endRef.current) return;
     endRef.current.scrollIntoView({ behavior: "auto", block: "end" });
   }, [conversation]);
+
+  if (isMessagesLoading) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center p-8 text-center">
+        <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   if (messages.length === 0) {
     return (

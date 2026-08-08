@@ -1,6 +1,12 @@
 import type { Message } from "#lib/types/chat";
 
 export function regenerateMessages(messages: Message[]): Message[] {
+  if (messages.length === 0) {
+    throw new Error(
+      "regenerateMessages: messages array is empty. Messages must be loaded before regenerating.",
+    );
+  }
+
   const lastMessage = messages[messages.length - 1];
   if (lastMessage?.role !== "assistant") {
     return messages;
@@ -15,6 +21,12 @@ export function applyMessageEdit(
   content: string,
   editedAt: Date = new Date(),
 ): Message[] {
+  if (messages.length === 0) {
+    throw new Error(
+      "applyMessageEdit: messages array is empty. Messages must be loaded before editing.",
+    );
+  }
+
   const index = messages.findIndex((message) => message.id === messageId);
   if (index === -1) {
     return messages;

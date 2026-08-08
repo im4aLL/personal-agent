@@ -27,7 +27,7 @@ import {
 } from "#components/ui/dialog";
 import { Input } from "#components/ui/input";
 import { searchConversations } from "#lib/turso-repository";
-import type { Conversation } from "#lib/types/chat";
+import type { Conversation, ConversationSummary } from "#lib/types/chat";
 import { useChatStore } from "#store/chat";
 import { version } from "../../package.json";
 import { PersonalAgentLogo } from "./personal-agent-logo";
@@ -54,6 +54,8 @@ function startOfDay(date: Date) {
 function differenceInCalendarDays(a: Date, b: Date) {
   return Math.floor((startOfDay(a).getTime() - startOfDay(b).getTime()) / (1000 * 60 * 60 * 24));
 }
+
+const TIME_LABELS = new Set(["Today", "Yesterday", "Previous 7 days"]);
 
 const MONTH_FORMAT = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long" });
 
@@ -130,7 +132,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Conversation[]>([]);
+  const [searchResults, setSearchResults] = useState<ConversationSummary[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
@@ -147,6 +149,9 @@ export function AppSidebar() {
   const createConversation = useChatStore((state) => state.createConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const monthGroups = useChatStore((state) => state.monthGroups);
+  const monthConversations = useChatStore((state) => state.monthConversations);
+  const loadMonthConversations = useChatStore((state) => state.loadMonthConversations);
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(searchInput);
@@ -163,13 +168,17 @@ export function AppSidebar() {
 
     let cancelled = false;
 
-    searchConversations(trimmed).then((results) => {
-      if (!cancelled) setSearchResults(results);
-    }).catch(() => {
-      if (!cancelled) setSearchResults([]);
-    });
+    searchConversations(trimmed)
+      .then((results) => {
+        if (!cancelled) setSearchResults(results);
+      })
+      .catch(() => {
+        if (!cancelled) setSearchResults([]);
+      });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [searchQuery]);
 
   const { allTags, taggedCount } = useMemo(() => {
@@ -185,7 +194,13 @@ export function AppSidebar() {
 
   const { pinnedConversations, unpinnedGroups } = useMemo(() => {
     const isSearching = searchQuery.trim().length > 0;
-    let filtered = isSearching ? searchResults : conversations;
+    // Search results are ConversationSummary, convert to Conversation-like objects
+    // for rendering. They won't have messages but that's fine for sidebar display.
+    const searchConversations: Conversation[] = searchResults.map((s) => ({
+      ...s,
+      messages: [],
+    }));
+    let filtered = isSearching ? searchConversations : conversations;
     if (selectedTag) {
       filtered = filtered.filter((c) => c.tags.includes(selectedTag));
     }
@@ -193,11 +208,24 @@ export function AppSidebar() {
       .filter((c) => c.pinned)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
     const unpinned = filtered.filter((c) => !c.pinned);
+    const allGroups = groupConversations(unpinned);
+    // Only keep Today/Yesterday/Previous 7 days from groupConversations.
+    // Month groups are rendered separately from store metadata.
+    const timeGroups = allGroups.filter(([label]) => TIME_LABELS.has(label));
     return {
       pinnedConversations: pinned,
-      unpinnedGroups: groupConversations(unpinned),
+      unpinnedGroups: timeGroups,
     };
   }, [searchQuery, searchResults, conversations, selectedTag]);
+
+  // Build a label->month-key lookup from monthGroups.
+  const labelToMonthKey = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const mg of monthGroups) {
+      map.set(mg.label, mg.month);
+    }
+    return map;
+  }, [monthGroups]);
 
   function handleNewChat() {
     createConversation(true);
@@ -234,6 +262,11 @@ export function AppSidebar() {
         next.delete(label);
       } else {
         next.add(label);
+        // Trigger lazy loading of month conversations.
+        const monthKey = labelToMonthKey.get(label);
+        if (monthKey) {
+          void loadMonthConversations(monthKey);
+        }
       }
       return next;
     });
@@ -481,50 +514,50 @@ export function AppSidebar() {
 
         {pinnedConversations.length > 0 && unpinnedGroups.length > 0 && <SidebarSeparator />}
 
-        {unpinnedGroups.map(([label, items]) => {
-          const isMonthGroup =
-            label !== "Today" && label !== "Yesterday" && label !== "Previous 7 days";
-          const isOpen = expandedMonths.has(label);
-
-          const groupContent = (
+        {unpinnedGroups.map(([label, items]) => (
+          <div key={label}>
             <SidebarGroup className="py-1">
-              {isMonthGroup ? (
-                <CollapsibleTrigger asChild>
-                  <SidebarGroupLabel className="cursor-pointer hover:text-foreground">
-                    {label}
-                    <span className="ml-auto flex items-center gap-1">
-                      <span className="text-muted-foreground text-[10px]">{items.length}</span>
-                      <ChevronDownIcon
-                        className={`size-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
-                      />
-                    </span>
-                  </SidebarGroupLabel>
-                </CollapsibleTrigger>
-              ) : (
-                <SidebarGroupLabel>{label}</SidebarGroupLabel>
-              )}
-              {isMonthGroup ? (
-                <CollapsibleContent>
-                  <SidebarMenu>
-                    {items.map((conversation) => renderConversationItem(conversation))}
-                  </SidebarMenu>
-                </CollapsibleContent>
-              ) : (
-                <SidebarMenu>
-                  {items.map((conversation) => renderConversationItem(conversation))}
-                </SidebarMenu>
-              )}
+              <SidebarGroupLabel>{label}</SidebarGroupLabel>
+              <SidebarMenu>
+                {items.map((conversation) => renderConversationItem(conversation))}
+              </SidebarMenu>
             </SidebarGroup>
-          );
+          </div>
+        ))}
 
-          return isMonthGroup ? (
-            <Collapsible key={label} open={isOpen} onOpenChange={() => toggleMonth(label)}>
-              {groupContent}
-            </Collapsible>
-          ) : (
-            <div key={label}>{groupContent}</div>
-          );
-        })}
+        {!searchQuery.trim() &&
+          !selectedTag &&
+          monthGroups.map((mg) => {
+            const isOpen = expandedMonths.has(mg.label);
+            const loadedItems = monthConversations[mg.month] ?? [];
+
+            return (
+              <Collapsible key={mg.month} open={isOpen} onOpenChange={() => toggleMonth(mg.label)}>
+                <SidebarGroup className="py-1">
+                  <CollapsibleTrigger asChild>
+                    <SidebarGroupLabel className="cursor-pointer hover:text-foreground">
+                      {mg.label}
+                      <span className="ml-auto flex items-center gap-1">
+                        <span className="text-muted-foreground text-[10px]">{mg.count}</span>
+                        <ChevronDownIcon
+                          className={`size-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+                        />
+                      </span>
+                    </SidebarGroupLabel>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenu>
+                      {loadedItems.map((summary) => {
+                        // Find the full Conversation in the conversations array.
+                        const conversation = conversations.find((c) => c.id === summary.id);
+                        return conversation ? renderConversationItem(conversation) : null;
+                      })}
+                    </SidebarMenu>
+                  </CollapsibleContent>
+                </SidebarGroup>
+              </Collapsible>
+            );
+          })}
 
         {isHistoryLoading && (
           <div className="flex items-center justify-center px-4 py-6 text-sm text-muted-foreground">

@@ -6,28 +6,28 @@ Safety guards prevent data loss from operations on conversations whose messages 
 
 **Blocked by:** #16 - Titles-only search.
 
-**Status:** Ready For Dev
+**Status:** Done
 
 ## Tasks
 
 ### Repository: new query functions
 
-- [ ] Add `loadConversationSummaries()` that runs 4 parallel queries (pinned, today, yesterday, previous 7 days) plus a month-metadata query, returning structured sidebar data with no messages
-- [ ] Add `loadConversationsForMonth(month, limit)` that loads conversation summaries for a single month when expanded
-- [ ] Add `loadMessages(conversationId)` that queries messages for a single conversation
+- [x] Add `loadConversationSummaries()` that runs 4 parallel queries (pinned, today, yesterday, previous 7 days) plus a month-metadata query, returning structured sidebar data with no messages
+- [x] Add `loadConversationsForMonth(month, limit)` that loads conversation summaries for a single month when expanded
+- [x] Add `loadMessages(conversationId)` that queries messages for a single conversation
 
 ### Store: lazy message loading
 
-- [ ] Change `loadHistory` to call `loadConversationSummaries()` instead of `loadConversations()`
-- [ ] Add `loadMessagesForConversation(conversationId)` action that fetches and merges messages into the conversations array
-- [ ] Wire `selectConversation` to trigger `loadMessagesForConversation` when the selected conversation has no messages loaded
-- [ ] Add per-conversation loading state (a `Set<string>` of IDs) so the chat pane can show a spinner
+- [x] Change `loadHistory` to call `loadConversationSummaries()` instead of `loadConversations()`
+- [x] Add `loadMessagesForConversation(conversationId)` action that fetches and merges messages into the conversations array
+- [x] Wire `selectConversation` to trigger `loadMessagesForConversation` when the selected conversation has no messages loaded
+- [x] Add per-conversation loading state (a `Set<string>` of IDs) so the chat pane can show a spinner
 
 ### Safety guards
 
-- [ ] Guard `persistConversation` (and `saveConversation`): skip or throw if `conversation.messages` is undefined, never persist an empty array that would wipe the database
-- [ ] Add assertions or early returns in `applyMessageEdit` and `regenerateMessages` paths to ensure messages are loaded before mutation
+- [x] Guard `persistConversation` (and `saveConversation`): skip or throw if `conversation.messages` is undefined, never persist an empty array that would wipe the database
+- [x] Add assertions or early returns in `applyMessageEdit` and `regenerateMessages` paths to ensure messages are loaded before mutation
 
 ### Chat pane loading state
 
-- [ ] Show a spinner in the chat pane when the selected conversation's messages are still loading
+- [x] Show a spinner in the chat pane when the selected conversation's messages are still loading
