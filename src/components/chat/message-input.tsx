@@ -284,21 +284,42 @@ function ThinkingSelector() {
   );
 }
 
+type SlashItem =
+  | { kind: "skill"; id: string; name: string; description?: string | null }
+  | { kind: "agent"; id: string; name: string; description?: string | null };
+
 function SlashCommandAutocomplete({
   open,
   onOpenChange,
   onSelect,
   anchorRef,
+  items,
+  highlightedIndex,
+  onHighlightChange,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelect: (name: string) => void;
   anchorRef: React.RefObject<HTMLElement | null>;
+  items: SlashItem[];
+  highlightedIndex: number;
+  onHighlightChange: (index: number) => void;
 }) {
-  const skills = useAgentsStore((s) => s.skills);
-  const agents = useAgentsStore((s) => s.customAgents);
+  const listRef = useRef<HTMLDivElement>(null);
 
-  if (skills.length === 0 && agents.length === 0) return null;
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (!listRef.current) return;
+    const highlighted = listRef.current.querySelector('[data-highlighted="true"]');
+    if (highlighted) {
+      highlighted.scrollIntoView({ block: "nearest" });
+    }
+  }, [highlightedIndex]);
+
+  if (items.length === 0) return null;
+
+  const hasSkills = items.some((i) => i.kind === "skill");
+  const hasAgents = items.some((i) => i.kind === "agent");
 
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
@@ -306,57 +327,78 @@ function SlashCommandAutocomplete({
         <div ref={anchorRef as React.RefObject<HTMLDivElement>} />
       </PopoverAnchor>
       <PopoverContent
-        className="w-64 p-1"
+        className="w-80 p-1"
         align="start"
         side="top"
+        sideOffset={8}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
-        <div className="max-h-60 overflow-auto">
-          {skills.length > 0 && (
+        <div ref={listRef} className="max-h-60 overflow-auto">
+          {hasSkills && (
             <>
               <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground">
                 <SparklesIcon className="size-3" />
                 Skills
               </div>
-              {skills.map((skill) => (
-                <button
-                  key={skill.id}
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-                  onClick={() => onSelect(skill.name)}
-                >
-                  <span className="font-medium">/{skill.name}</span>
-                  {skill.description && (
-                    <span className="truncate text-xs text-muted-foreground">
-                      {skill.description}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {items
+                .filter((i) => i.kind === "skill")
+                .map((item) => {
+                  const globalIndex = items.indexOf(item);
+                  const isHighlighted = globalIndex === highlightedIndex;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      data-highlighted={isHighlighted}
+                      className={`flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm whitespace-nowrap ${
+                        isHighlighted ? "bg-accent" : "hover:bg-accent"
+                      }`}
+                      onClick={() => onSelect(item.name)}
+                      onMouseEnter={() => onHighlightChange(globalIndex)}
+                    >
+                      <span className="font-medium shrink-0">/{item.name}</span>
+                      {item.description && (
+                        <span className="truncate text-xs text-muted-foreground">
+                          {item.description}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
             </>
           )}
-          {agents.length > 0 && (
+          {hasAgents && (
             <>
-              {skills.length > 0 && <div className="my-1 border-t" />}
+              {hasSkills && <div className="my-1 border-t" />}
               <div className="flex items-center gap-1 px-2 py-1.5 text-xs font-medium text-muted-foreground">
                 <BotIcon className="size-3" />
                 Agents
               </div>
-              {agents.map((agent) => (
-                <button
-                  key={agent.id}
-                  type="button"
-                  className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
-                  onClick={() => onSelect(agent.name)}
-                >
-                  <span className="font-medium">/{agent.name}</span>
-                  {agent.description && (
-                    <span className="truncate text-xs text-muted-foreground">
-                      {agent.description}
-                    </span>
-                  )}
-                </button>
-              ))}
+              {items
+                .filter((i) => i.kind === "agent")
+                .map((item) => {
+                  const globalIndex = items.indexOf(item);
+                  const isHighlighted = globalIndex === highlightedIndex;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      data-highlighted={isHighlighted}
+                      className={`flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm whitespace-nowrap ${
+                        isHighlighted ? "bg-accent" : "hover:bg-accent"
+                      }`}
+                      onClick={() => onSelect(item.name)}
+                      onMouseEnter={() => onHighlightChange(globalIndex)}
+                    >
+                      <span className="font-medium shrink-0">/{item.name}</span>
+                      {item.description && (
+                        <span className="truncate text-xs text-muted-foreground">
+                          {item.description}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
             </>
           )}
         </div>
@@ -429,9 +471,36 @@ export function MessageInput() {
   // Show slash autocomplete when user types "/" at the start
   const showSlashAutocomplete = slashQuery !== null && (skills.length > 0 || agents.length > 0);
 
+  // Compute filtered slash items
+  const slashItems = useMemo<SlashItem[]>(() => {
+    if (slashQuery === null) return [];
+    const results: SlashItem[] = [];
+    const lowerQuery = slashQuery.toLowerCase();
+
+    for (const skill of skills) {
+      if (!slashQuery || skill.name.toLowerCase().includes(lowerQuery)) {
+        results.push({ kind: "skill", id: skill.id, name: skill.name, description: skill.description });
+      }
+    }
+    for (const agent of agents) {
+      if (!slashQuery || agent.name.toLowerCase().includes(lowerQuery)) {
+        results.push({ kind: "agent", id: agent.id, name: agent.name, description: agent.description });
+      }
+    }
+    return results;
+  }, [skills, agents, slashQuery]);
+
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+
+  // Reset highlight when slash opens or items change
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [slashOpen]);
+
   function handleSlashSelect(name: string) {
     setValue(`/${name} `);
     setSlashOpen(false);
+    setHighlightedIndex(0);
     textareaRef.current?.focus();
   }
 
@@ -453,6 +522,12 @@ export function MessageInput() {
     function handleWindowKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
 
+      if (slashOpen) {
+        event.preventDefault();
+        setSlashOpen(false);
+        return;
+      }
+
       const target = event.target as HTMLElement;
       const isInTextarea = target === textareaRef.current;
       const isInInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
@@ -470,7 +545,7 @@ export function MessageInput() {
 
     window.addEventListener("keydown", handleWindowKeyDown);
     return () => window.removeEventListener("keydown", handleWindowKeyDown);
-  }, [isGenerating, stop, value]);
+  }, [isGenerating, stop, value, slashOpen]);
 
   function handleSend() {
     const trimmed = value.trim();
@@ -493,6 +568,33 @@ export function MessageInput() {
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // When slash autocomplete is open, handle navigation keys here (before Enter-send)
+    if (slashOpen && slashItems.length > 0) {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setHighlightedIndex((prev) => (prev + 1) % slashItems.length);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setHighlightedIndex((prev) => (prev - 1 + slashItems.length) % slashItems.length);
+        return;
+      }
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        const item = slashItems[highlightedIndex];
+        if (item) {
+          handleSlashSelect(item.name);
+        }
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSlashOpen(false);
+        return;
+      }
+    }
+
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       if (isGenerating) {
@@ -576,7 +678,7 @@ export function MessageInput() {
 
   return (
     <div className="border-t bg-background px-4 py-4">
-      <div className="relative flex flex-col rounded-2xl border bg-background p-3 dark:bg-transparent">
+      <div ref={slashAnchorRef} className="relative flex flex-col rounded-2xl border bg-background p-3 dark:bg-transparent">
         {hasActiveItems && (
           <div className="flex flex-wrap gap-1.5 px-4 pb-3">
             {activeInstructionName && (
@@ -679,7 +781,6 @@ export function MessageInput() {
             maxLength={MAX_MESSAGE_LENGTH}
             aria-label="Message input"
           />
-          <div ref={slashAnchorRef} className="absolute left-4 top-3" />
           <div className="p-1.5">
             {isGenerating ? (
               <Button
@@ -730,10 +831,13 @@ export function MessageInput() {
         AI can make mistakes. Verify important information.
       </p>
       <SlashCommandAutocomplete
-        open={slashOpen && showSlashAutocomplete}
+        open={slashOpen && showSlashAutocomplete && slashItems.length > 0}
         onOpenChange={setSlashOpen}
         onSelect={handleSlashSelect}
         anchorRef={slashAnchorRef}
+        items={slashItems}
+        highlightedIndex={highlightedIndex}
+        onHighlightChange={setHighlightedIndex}
       />
     </div>
   );

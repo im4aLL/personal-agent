@@ -77,6 +77,34 @@ function buildUserContent(message: Message): UserContent {
   return parts;
 }
 
+function systemPromptFromState(state: {
+  activeInstructionId: string | null;
+  activeSkillId: string | null;
+  activeAgentId: string | null;
+  userInstructions: Array<{ id: string; content?: string | null }>;
+  skills: Array<{ id: string; content?: string | null }>;
+  customAgents: Array<{ id: string; content?: string | null }>;
+}): string | undefined {
+  const parts: string[] = [];
+
+  if (state.activeInstructionId) {
+    const instruction = state.userInstructions.find((i) => i.id === state.activeInstructionId);
+    if (instruction?.content) parts.push(instruction.content);
+  }
+
+  if (state.activeSkillId) {
+    const skill = state.skills.find((s) => s.id === state.activeSkillId);
+    if (skill?.content) parts.push(skill.content);
+  }
+
+  if (state.activeAgentId) {
+    const agent = state.customAgents.find((a) => a.id === state.activeAgentId);
+    if (agent?.content) parts.push(agent.content);
+  }
+
+  return parts.length > 0 ? parts.join("\n\n") : undefined;
+}
+
 function buildCoreMessages(messages: Message[]) {
   return messages
     .filter((m) => m.role === "user" || m.role === "assistant")
@@ -120,26 +148,18 @@ export function useChat() {
   const agentSkills = useAgentsStore((s) => s.skills);
   const agentCustomAgents = useAgentsStore((s) => s.customAgents);
 
-  const systemPrompt = useMemo(() => {
-    const parts: string[] = [];
-
-    if (activeInstructionId) {
-      const instruction = userInstructions.find((i) => i.id === activeInstructionId);
-      if (instruction?.content) parts.push(instruction.content);
-    }
-
-    if (activeSkillId) {
-      const skill = agentSkills.find((s) => s.id === activeSkillId);
-      if (skill?.content) parts.push(skill.content);
-    }
-
-    if (activeAgentId) {
-      const agent = agentCustomAgents.find((a) => a.id === activeAgentId);
-      if (agent?.content) parts.push(agent.content);
-    }
-
-    return parts.length > 0 ? parts.join("\n\n") : undefined;
-  }, [activeInstructionId, activeSkillId, activeAgentId, userInstructions, agentSkills, agentCustomAgents]);
+  const systemPrompt = useMemo(
+    () =>
+      systemPromptFromState({
+        activeInstructionId,
+        activeSkillId,
+        activeAgentId,
+        userInstructions,
+        skills: agentSkills,
+        customAgents: agentCustomAgents,
+      }),
+    [activeInstructionId, activeSkillId, activeAgentId, userInstructions, agentSkills, agentCustomAgents],
+  );
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
@@ -400,6 +420,12 @@ export function useChat() {
         // so the skill/agent system prompt is injected
       }
 
+      // Build system prompt from the freshly activated state (not from the useMemo
+      // closure, which is stale at this point because activateSkill/activateAgent
+      // were called synchronously above and React has not re-rendered yet).
+      const freshState = useAgentsStore.getState();
+      const activePrompt = systemPromptFromState(freshState);
+
       const currentConversation = selectSelectedConversation(useChatStore.getState());
       if (!currentConversation) {
         return;
@@ -418,7 +444,7 @@ export function useChat() {
       await streamAssistantResponse(
         currentConversation.id,
         [...currentConversation.messages, userMessage],
-        systemPrompt,
+        activePrompt,
       );
 
       // One-shot: deactivate skill/agent after response completes
