@@ -9,6 +9,14 @@ import { ProviderForm, type ProviderFormData } from "#components/settings/provid
 import { ProvidersList } from "#components/settings/providers-list";
 import { Button } from "#components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "#components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#components/ui/tabs";
 import type { ConnectionMode } from "#lib/providers";
 import { PROVIDER_PRESETS, type ProviderInfo, useChatStore } from "#store/chat";
@@ -23,6 +31,7 @@ export default function SettingsPage() {
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null);
+  const [deleteConfirmProvider, setDeleteConfirmProvider] = useState<ProviderInfo | null>(null);
 
   function handleAdd() {
     setEditingProvider(null);
@@ -35,7 +44,14 @@ export default function SettingsPage() {
   }
 
   function handleDelete(provider: ProviderInfo) {
-    deleteProvider(provider.id);
+    setDeleteConfirmProvider(provider);
+  }
+
+  function handleConfirmDelete() {
+    if (deleteConfirmProvider) {
+      deleteProvider(deleteConfirmProvider.id);
+      setDeleteConfirmProvider(null);
+    }
   }
 
   function handleSubmit(data: ProviderFormData) {
@@ -210,6 +226,27 @@ export default function SettingsPage() {
         onSubmit={handleSubmit}
         existingProviders={providers}
       />
+
+      <Dialog open={deleteConfirmProvider !== null} onOpenChange={(open) => { if (!open) setDeleteConfirmProvider(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete provider</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete{" "}
+              <span className="font-medium text-foreground">{deleteConfirmProvider?.label}</span>?
+              This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmProvider(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
