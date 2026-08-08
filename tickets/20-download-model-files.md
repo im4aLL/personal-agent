@@ -14,7 +14,7 @@
 - [x] Add image download support: uses `data:` URL parsing for inline images and Tauri `proxy_bytes` Rust command (bypasses CORS) for remote images
 - [x] Add `proxy_bytes` Rust command (`src-tauri/src/proxy.rs`) that fetches binary content and returns base64-encoded bytes with content-type
 - [x] Intercept all markdown links via custom `a` component: file-like URLs (.pdf, .zip, etc.) download via proxy; other external URLs open in system browser via `@tauri-apps/plugin-opener` to prevent webview navigation lock-in
-- [ ] Add conversation-level export (Markdown) as a stretch goal
+- [x] Add conversation-level export (Markdown) as a stretch goal
 
 ## Considerations
 
