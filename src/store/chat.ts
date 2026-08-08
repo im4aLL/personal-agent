@@ -7,9 +7,18 @@ import {
   toStoredModelSelection,
   toStoredProvider,
 } from "#lib/config";
-import { MOCK_CONVERSATIONS } from "#lib/mock-data";
 import type { ConnectionMode, ModelInfo, ProviderInput } from "#lib/providers";
 import { fetchProviderModels } from "#lib/providers";
+import { getTursoConfig } from "#lib/turso";
+import {
+  deleteConversation as deleteConversationRemote,
+  deleteMessage as deleteMessageRemote,
+  loadConversations as loadConversationsRemote,
+  runMigrations,
+  saveConversation,
+  saveMessage,
+  truncateMessages,
+} from "#lib/turso-repository";
 import type { Conversation, Message, MessageModelInfo } from "#lib/types/chat";
 import { applyMessageEdit, regenerateMessages } from "./chat-helpers";
 
@@ -36,6 +45,9 @@ export type ChatState = {
   selectedModel: { providerId: string; modelId: string };
   providers: ProviderInfo[];
   thinkingLevel: string;
+  isHistoryLoaded: boolean;
+  isHistoryLoading: boolean;
+  historyError: string | null;
   selectConversation: (id: string | null) => void;
   setSelectedModel: (providerId: string, modelId: string) => void;
   setConversations: (conversations: Conversation[]) => void;
@@ -51,6 +63,8 @@ export type ChatState = {
   deleteMessage: (conversationId: string, messageId: string) => void;
   regenerate: (conversationId: string) => void;
   editMessage: (conversationId: string, messageId: string, content: string) => void;
+  persistConversation: (conversationId: string) => void;
+  loadHistory: () => Promise<void>;
   addProvider: (input: ProviderInput) => void;
   updateProvider: (id: string, input: ProviderInput) => void;
   deleteProvider: (id: string) => void;
@@ -156,7 +170,11 @@ function loadModelSelection(): { providerId: string; modelId: string } {
 }
 
 function loadConversations(): Conversation[] {
-  return MOCK_CONVERSATIONS;
+  return [];
+}
+
+function isTursoConfigured(): boolean {
+  return getTursoConfig() !== null;
 }
 
 export function createConversationId(): string {
@@ -219,6 +237,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   selectedModel: loadModelSelection(),
   providers: loadProviderState(),
   thinkingLevel: "off",
+  isHistoryLoaded: false,
+  isHistoryLoading: false,
+  historyError: null,
 
   selectConversation: (id) => set({ selectedConversationId: id }),
 
@@ -246,12 +267,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return;
     }
 
-    set((state) => ({
-      conversations: updateConversation(state, id, (conversation) => ({
+    set((state) => {
+      const nextConversations = updateConversation(state, id, (conversation) => ({
         ...conversation,
         title: trimmed,
-      })),
-    }));
+      }));
+
+      if (isTursoConfigured()) {
+        const updated = nextConversations.find((c) => c.id === id);
+        if (updated) {
+          void saveConversation(updated);
+        }
+      }
+
+      return { conversations: nextConversations };
+    });
   },
 
   deleteConversation: (id) => {
@@ -268,6 +298,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         nextSelectedId = mostRecent.id;
       } else if (state.selectedConversationId === id) {
         nextSelectedId = null;
+      }
+
+      if (isTursoConfigured()) {
+        void deleteConversationRemote(id);
       }
 
       return {
@@ -296,12 +330,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setThinkingLevel: (level) => set({ thinkingLevel: level }),
 
   addMessage: (conversationId, message) => {
-    set((state) => ({
-      conversations: updateConversation(state, conversationId, (conversation) => ({
-        ...conversation,
-        messages: [...conversation.messages, message],
-      })),
-    }));
+    set((state) => {
+      if (isTursoConfigured()) {
+        void saveMessage(conversationId, message);
+      }
+
+      return {
+        conversations: updateConversation(state, conversationId, (conversation) => ({
+          ...conversation,
+          messages: [...conversation.messages, message],
+        })),
+      };
+    });
   },
 
   appendMessageContent: (conversationId, messageId, delta) => {
@@ -338,12 +378,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   deleteMessage: (conversationId, messageId) => {
-    set((state) => ({
-      conversations: updateConversation(state, conversationId, (conversation) => ({
-        ...conversation,
-        messages: conversation.messages.filter((message) => message.id !== messageId),
-      })),
-    }));
+    set((state) => {
+      if (isTursoConfigured()) {
+        void deleteMessageRemote(messageId);
+      }
+
+      return {
+        conversations: updateConversation(state, conversationId, (conversation) => ({
+          ...conversation,
+          messages: conversation.messages.filter((message) => message.id !== messageId),
+        })),
+      };
+    });
+  },
+
+  persistConversation: (conversationId) => {
+    if (!isTursoConfigured()) return;
+    const conversation = get().conversations.find((c) => c.id === conversationId);
+    if (conversation) {
+      void saveConversation(conversation);
+    }
+  },
+
+  loadHistory: async () => {
+    set({ isHistoryLoading: true, historyError: null });
+
+    try {
+      if (!isTursoConfigured()) {
+        set({ isHistoryLoaded: true, isHistoryLoading: false });
+        return;
+      }
+
+      await runMigrations();
+      const loaded = await loadConversationsRemote();
+      set({ conversations: loaded, isHistoryLoaded: true, isHistoryLoading: false });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load history";
+      set({ historyError: message, isHistoryLoaded: true, isHistoryLoading: false });
+    }
   },
 
   regenerate: (conversationId) => {
@@ -356,12 +428,25 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   editMessage: (conversationId, messageId, content) => {
-    set((state) => ({
-      conversations: updateConversation(state, conversationId, (conversation) => ({
-        ...conversation,
-        messages: applyMessageEdit(conversation.messages, messageId, content),
-      })),
-    }));
+    set((state) => {
+      if (isTursoConfigured()) {
+        void (async () => {
+          await truncateMessages(conversationId, messageId);
+          const currentState = get();
+          const conversation = currentState.conversations.find((c) => c.id === conversationId);
+          if (conversation) {
+            await saveConversation(conversation);
+          }
+        })();
+      }
+
+      return {
+        conversations: updateConversation(state, conversationId, (conversation) => ({
+          ...conversation,
+          messages: applyMessageEdit(conversation.messages, messageId, content),
+        })),
+      };
+    });
   },
 
   addProvider: (input) => {

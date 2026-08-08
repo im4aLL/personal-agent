@@ -4,18 +4,18 @@
 
 **Blocked by:** #8 - Conversation management and auto-titles
 
-**Status:** Ready For Dev
+**Status:** Done
 
-- [ ] `lib/turso.ts` modeled on `personal-os/src/lib/turso.ts`: `CREATE TABLE IF NOT EXISTS` migrations for `schema_meta`, `conversations`, `messages`
-- [ ] Version-check migration flow: check `schema_meta` version at startup, run required migrations in order
-- [ ] v1 schema: `schema_meta` at version 1, `conversations` table, `messages` table
-- [ ] `tursoExecuteMany(requests[])`: multi-statement pipeline helper for atomic truncation and deletion
-- [ ] Repositories for conversations and messages (CRUD via Turso pipeline)
-- [ ] Chat store: load history on startup, save on message completion and conversation mutations (last-write-wins, single writer)
-- [ ] Edit-message truncation and conversation deletion use `tursoExecuteMany`
-- [ ] `lib/search.ts`: client-side filter over loaded data; wire sidebar search box
-- [ ] Settings > Data tab: real Turso URL/token fields with connection status indicator
-- [ ] Loading, empty-history, and offline/error states with toasts
+- [x] `lib/turso.ts` modeled on `personal-os/src/lib/turso.ts`: `CREATE TABLE IF NOT EXISTS` migrations for `schema_meta`, `conversations`, `messages`
+- [x] Version-check migration flow: check `schema_meta` version at startup, run required migrations in order
+- [x] v1 schema: `schema_meta` at version 1, `conversations` table, `messages` table
+- [x] `tursoExecuteMany(requests[])`: multi-statement pipeline helper for atomic truncation and deletion
+- [x] Repositories for conversations and messages (CRUD via Turso pipeline)
+- [x] Chat store: load history on startup, save on message completion and conversation mutations (last-write-wins, single writer)
+- [x] Edit-message truncation and conversation deletion use `tursoExecuteMany`
+- [x] `lib/search.ts`: client-side filter over loaded data; wire sidebar search box
+- [x] Settings > Data tab: real Turso URL/token fields with connection status indicator
+- [x] Loading, empty-history, and offline/error states with toasts
 - [ ] Verify: chat, restart, confirm history returns
 - [ ] Verify: search filters conversations by title and message text
 - [ ] Verify: delete persists across restarts

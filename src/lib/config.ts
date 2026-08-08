@@ -2,6 +2,8 @@ import type { ConnectionMode } from "#lib/providers";
 
 const PROVIDERS_STORAGE_KEY = "personal-agent:providers";
 const SELECTED_MODEL_STORAGE_KEY = "personal-agent:selected-model";
+export const TURSO_URL_KEY = "personal-agent:turso-url";
+export const TURSO_TOKEN_KEY = "personal-agent:turso-token";
 
 export type StoredProvider = {
   id: string;
@@ -161,4 +163,42 @@ export function toStoredProvider(provider: {
 
 export function toStoredModelSelection(providerId: string, modelId: string): StoredModelSelection {
   return { providerId, modelId };
+}
+
+export function loadTursoUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(TURSO_URL_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function loadTursoToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(TURSO_TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function saveTursoConfig(url: string, token: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(TURSO_URL_KEY, url);
+    window.localStorage.setItem(TURSO_TOKEN_KEY, token);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+export function clearTursoConfig(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(TURSO_URL_KEY);
+    window.localStorage.removeItem(TURSO_TOKEN_KEY);
+  } catch {
+    // Ignore storage errors.
+  }
 }

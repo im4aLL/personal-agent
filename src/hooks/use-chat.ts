@@ -39,6 +39,7 @@ export function useChat() {
   const setMessageStatus = useChatStore((state) => state.setMessageStatus);
   const setMessageError = useChatStore((state) => state.setMessageError);
   const setConversationTitle = useChatStore((state) => state.setConversationTitle);
+  const persistConversation = useChatStore((state) => state.persistConversation);
   const deleteMessage = useChatStore((state) => state.deleteMessage);
   const regenerateMessage = useChatStore((state) => state.regenerate);
   const editMessageInStore = useChatStore((state) => state.editMessage);
@@ -107,6 +108,7 @@ export function useChat() {
         }
 
         setMessageStatus(conversationId, assistantMessage.id, "sent");
+        persistConversation(conversationId);
 
         const currentConversation = useChatStore
           .getState()
@@ -130,8 +132,10 @@ export function useChat() {
                 modelInfo.modelId,
               );
               setConversationTitle(conversationId, title);
+              persistConversation(conversationId);
             } catch {
               setConversationTitle(conversationId, DEFAULT_CONVERSATION_TITLE);
+              persistConversation(conversationId);
             }
           }
         }
@@ -161,6 +165,7 @@ export function useChat() {
       setMessageStatus,
       setMessageError,
       setConversationTitle,
+      persistConversation,
     ],
   );
 

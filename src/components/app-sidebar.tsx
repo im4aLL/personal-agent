@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Loader2Icon,
   MessageSquareIcon,
   PencilIcon,
   PlusIcon,
@@ -20,6 +21,7 @@ import {
   DialogTitle,
 } from "#components/ui/dialog";
 import { Input } from "#components/ui/input";
+import { searchConversations } from "#lib/search";
 import type { Conversation } from "#lib/types/chat";
 import { useChatStore } from "#store/chat";
 import { ThemeToggle } from "./theme-toggle";
@@ -118,16 +120,15 @@ export function AppSidebar() {
 
   const conversations = useChatStore((state) => state.conversations);
   const selectedConversationId = useChatStore((state) => state.selectedConversationId);
+  const isHistoryLoading = useChatStore((state) => state.isHistoryLoading);
+  const isHistoryLoaded = useChatStore((state) => state.isHistoryLoaded);
   const selectConversation = useChatStore((state) => state.selectConversation);
   const createConversation = useChatStore((state) => state.createConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
 
   const filteredGroups = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    const filtered = query
-      ? conversations.filter((conversation) => conversation.title.toLowerCase().includes(query))
-      : conversations;
+    const filtered = searchConversations(conversations, searchQuery.trim());
     return groupConversations(filtered);
   }, [searchQuery, conversations]);
 
@@ -269,7 +270,23 @@ export function AppSidebar() {
           </SidebarGroup>
         ))}
 
-        {filteredGroups.length === 0 && (
+        {isHistoryLoading && (
+          <div className="flex items-center justify-center px-4 py-6 text-sm text-muted-foreground">
+            <Loader2Icon className="size-4 animate-spin mr-2" />
+            Loading conversations...
+          </div>
+        )}
+
+        {!isHistoryLoading &&
+          isHistoryLoaded &&
+          conversations.length === 0 &&
+          filteredGroups.length === 0 && (
+            <div className="px-4 py-6 text-center text-sm text-muted-foreground">
+              No conversations yet.
+            </div>
+          )}
+
+        {!isHistoryLoading && filteredGroups.length === 0 && conversations.length > 0 && (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">
             No conversations found.
           </div>

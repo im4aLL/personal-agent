@@ -1,25 +1,106 @@
 "use client";
 
-import { useState } from "react";
+import { CheckCircleIcon, CircleAlertIcon, Loader2Icon, XCircleIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "#components/ui/button";
 import { Input } from "#components/ui/input";
 import { Label } from "#components/ui/label";
+import { clearTursoConfig, loadTursoToken, loadTursoUrl, saveTursoConfig } from "#lib/config";
+import { getTursoConfig, tursoSelect } from "#lib/turso";
 
-interface DataTabProps {
-  initialUrl?: string;
-  initialToken?: string;
-}
+type ConnectionStatus = "idle" | "checking" | "connected" | "failed";
 
-export function DataTab({ initialUrl = "", initialToken = "" }: DataTabProps) {
-  const [url, setUrl] = useState(initialUrl);
-  const [token, setToken] = useState(initialToken);
+export function DataTab() {
+  const [url, setUrl] = useState("");
+  const [token, setToken] = useState("");
+  const [status, setStatus] = useState<ConnectionStatus>("idle");
+  const [initialized, setInitialized] = useState(false);
+
+  useEffect(() => {
+    const savedUrl = loadTursoUrl();
+    const savedToken = loadTursoToken();
+    if (savedUrl) setUrl(savedUrl);
+    if (savedToken) setToken(savedToken);
+    setInitialized(true);
+  }, []);
+
+  useEffect(() => {
+    if (!initialized) return;
+    if (url && token) {
+      setStatus("idle");
+    } else {
+      setStatus("idle");
+    }
+  }, [url, token, initialized]);
 
   function handleSave(event: React.FormEvent) {
     event.preventDefault();
-    toast("Coming soon", {
-      description: "Saving Turso config is not implemented yet.",
+    saveTursoConfig(url.trim(), token.trim());
+    toast.success("Turso config saved", {
+      description: "Database credentials have been stored.",
     });
+    setStatus("idle");
+  }
+
+  function handleClear() {
+    clearTursoConfig();
+    setUrl("");
+    setToken("");
+    setStatus("idle");
+    toast.success("Turso config cleared");
+  }
+
+  async function handleTestConnection() {
+    setStatus("checking");
+    try {
+      const config = getTursoConfig();
+      if (!config) {
+        setStatus("failed");
+        return;
+      }
+      await tursoSelect("SELECT 1");
+      setStatus("connected");
+      toast.success("Connection successful");
+    } catch (error) {
+      setStatus("failed");
+      toast.error("Connection failed", {
+        description: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  function renderStatusBadge() {
+    switch (status) {
+      case "checking":
+        return (
+          <span className="inline-flex items-center gap-1.5 text-sm text-amber-600 dark:text-amber-400">
+            <Loader2Icon className="size-3.5 animate-spin" />
+            Checking...
+          </span>
+        );
+      case "connected":
+        return (
+          <span className="inline-flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400">
+            <CheckCircleIcon className="size-3.5" />
+            Connected
+          </span>
+        );
+      case "failed":
+        return (
+          <span className="inline-flex items-center gap-1.5 text-sm text-red-600 dark:text-red-400">
+            <XCircleIcon className="size-3.5" />
+            Connection failed
+          </span>
+        );
+      default:
+        return (
+          <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+            <CircleAlertIcon className="size-3.5" />
+            Not connected
+          </span>
+        );
+    }
   }
 
   return (
@@ -29,6 +110,11 @@ export function DataTab({ initialUrl = "", initialToken = "" }: DataTabProps) {
         <p className="text-sm text-muted-foreground">
           Connect to a Turso database for persistent storage.
         </p>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <span className="text-sm font-medium">Status:</span>
+        {renderStatusBadge()}
       </div>
 
       <div className="grid gap-4">
@@ -54,7 +140,15 @@ export function DataTab({ initialUrl = "", initialToken = "" }: DataTabProps) {
         </div>
       </div>
 
-      <Button type="submit">Save Turso config</Button>
+      <div className="flex gap-2">
+        <Button type="submit">Save</Button>
+        <Button type="button" variant="outline" onClick={handleTestConnection}>
+          Test Connection
+        </Button>
+        <Button type="button" variant="ghost" onClick={handleClear}>
+          Clear
+        </Button>
+      </div>
     </form>
   );
 }
