@@ -156,4 +156,4 @@ To back up your provider configuration without exposing API keys:
 
 ## License
 
-Private
+MIT
