@@ -16,7 +16,7 @@
 - [x] `lib/search.ts`: client-side filter over loaded data; wire sidebar search box
 - [x] Settings > Data tab: real Turso URL/token fields with connection status indicator
 - [x] Loading, empty-history, and offline/error states with toasts
-- [ ] Verify: chat, restart, confirm history returns
-- [ ] Verify: search filters conversations by title and message text
-- [ ] Verify: delete persists across restarts
-- [ ] Verify: disconnect or invalid token shows clear error state
+- [x] Verify: chat, restart, confirm history returns
+- [x] Verify: search filters conversations by title and message text
+- [x] Verify: delete persists across restarts
+- [x] Verify: disconnect or invalid token shows clear error state
