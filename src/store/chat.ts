@@ -1,7 +1,13 @@
 "use client";
 
 import { create } from "zustand";
-import { loadSelectedModel, saveSelectedModel, toStoredModelSelection } from "#lib/config";
+import {
+  loadDisabledModels,
+  loadSelectedModel,
+  saveDisabledModels,
+  saveSelectedModel,
+  toStoredModelSelection,
+} from "#lib/config";
 import * as providerEncryption from "#lib/providerEncryption";
 import type { ProviderRecord } from "#lib/providerStorage";
 import * as providerStorage from "#lib/providerStorage";
@@ -57,6 +63,7 @@ export type ChatState = {
   providerSyncError: string | null;
   providerSyncSummary: MergeSummary | null;
   providerSyncPending: boolean;
+  disabledModels: Set<string>;
   selectConversation: (id: string | null) => void;
   setSelectedModel: (providerId: string, modelId: string) => void;
   setConversations: (conversations: Conversation[]) => void;
@@ -87,6 +94,9 @@ export type ChatState = {
     onSummary?: (summary: MergeSummary) => Promise<boolean>,
   ) => Promise<providerSync.MergeResult>;
   loadProviderSyncKey: () => Promise<void>;
+  toggleModelEnabled: (providerId: string, modelId: string, enabled: boolean) => void;
+  isModelEnabled: (providerId: string, modelId: string) => boolean;
+  getEnabledModels: (providerId: string) => ModelInfo[];
 };
 
 export const PROVIDER_PRESETS: ProviderInput[] = [
@@ -182,16 +192,55 @@ function loadProviderState(): ProviderInfo[] {
   return providerStorage.getAll().map(recordToProvider);
 }
 
-function loadModelSelection(): { providerId: string; modelId: string } {
+function loadModelSelection(
+  providers: ProviderInfo[],
+  disabledModels: Set<string>,
+): { providerId: string; modelId: string } {
   const stored = loadSelectedModel();
   if (!stored) {
-    return DEFAULT_MODEL;
+    return getFallbackModel(providers, disabledModels);
+  }
+
+  // Validate: the stored provider must exist and the stored model must be enabled.
+  const provider = providers.find((p) => p.id === stored.providerId);
+  if (!provider) {
+    return getFallbackModel(providers, disabledModels);
+  }
+
+  const model = provider.models.find((m) => m.id === stored.modelId);
+  if (!model) {
+    return getFallbackModel(providers, disabledModels);
+  }
+
+  if (disabledModels.has(`${stored.providerId}:${stored.modelId}`)) {
+    const firstEnabled = provider.models.find(
+      (m) => !disabledModels.has(`${stored.providerId}:${m.id}`),
+    );
+    if (firstEnabled) {
+      return { providerId: stored.providerId, modelId: firstEnabled.id };
+    }
+
+    return getFallbackModel(providers, disabledModels);
   }
 
   return {
     providerId: stored.providerId,
     modelId: stored.modelId,
   };
+}
+
+function getFallbackModel(
+  providers: ProviderInfo[],
+  disabledModels: Set<string>,
+): { providerId: string; modelId: string } {
+  for (const provider of providers) {
+    const firstEnabled = provider.models.find((m) => !disabledModels.has(`${provider.id}:${m.id}`));
+    if (firstEnabled) {
+      return { providerId: provider.id, modelId: firstEnabled.id };
+    }
+  }
+
+  return DEFAULT_MODEL;
 }
 
 function loadConversations(): Conversation[] {
@@ -277,11 +326,14 @@ function updateConversation(
   );
 }
 
+const initialProviders = loadProviderState();
+const initialDisabledModels = loadDisabledModels();
+
 export const useChatStore = create<ChatState>((set, get) => ({
   conversations: loadConversations(),
   selectedConversationId: null,
-  selectedModel: loadModelSelection(),
-  providers: loadProviderState(),
+  selectedModel: loadModelSelection(initialProviders, initialDisabledModels),
+  providers: initialProviders,
   thinkingLevel: "off",
   isHistoryLoaded: false,
   isHistoryLoading: false,
@@ -292,6 +344,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   providerSyncError: null,
   providerSyncSummary: null,
   providerSyncPending: false,
+  disabledModels: initialDisabledModels,
 
   selectConversation: (id) => set({ selectedConversationId: id }),
 
@@ -576,7 +629,29 @@ export const useChatStore = create<ChatState>((set, get) => ({
         )
       : remaining;
 
-    set({ providers: nextProviders });
+    // Clear default model if it belonged to the deleted provider.
+    let nextSelectedModel = state.selectedModel;
+    if (state.selectedModel.providerId === id) {
+      const defaultProvider = nextProviders.find((p) => p.isDefault) ?? nextProviders[0];
+      if (defaultProvider) {
+        const firstEnabled =
+          defaultProvider.models.find(
+            (m) => !state.disabledModels.has(`${defaultProvider.id}:${m.id}`),
+          ) ?? defaultProvider.models[0];
+        if (firstEnabled) {
+          nextSelectedModel = { providerId: defaultProvider.id, modelId: firstEnabled.id };
+          persistSelectedModel(nextSelectedModel);
+        } else {
+          nextSelectedModel = { providerId: defaultProvider.id, modelId: "" };
+          persistSelectedModel(nextSelectedModel);
+        }
+      } else {
+        nextSelectedModel = { providerId: "", modelId: "" };
+        persistSelectedModel(nextSelectedModel);
+      }
+    }
+
+    set({ providers: nextProviders, selectedModel: nextSelectedModel });
     persistProviders(nextProviders);
     void get().syncProviders();
   },
@@ -674,6 +749,56 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ providers: nextProviders });
       persistProviders(nextProviders);
     }
+  },
+
+  toggleModelEnabled: (providerId, modelId, enabled) => {
+    const state = get();
+    const key = `${providerId}:${modelId}`;
+    const next = new Set(state.disabledModels);
+
+    if (enabled) {
+      next.delete(key);
+    } else {
+      next.add(key);
+    }
+
+    set({ disabledModels: next });
+    saveDisabledModels(next);
+
+    // If the toggled model was the selected model, fall back to first enabled.
+    if (
+      !enabled &&
+      state.selectedModel.providerId === providerId &&
+      state.selectedModel.modelId === modelId
+    ) {
+      const provider = state.providers.find((p) => p.id === providerId);
+      if (provider) {
+        const firstEnabled = provider.models.find((m) => !next.has(`${providerId}:${m.id}`));
+        if (firstEnabled) {
+          set({ selectedModel: { providerId, modelId: firstEnabled.id } });
+          persistSelectedModel({ providerId, modelId: firstEnabled.id });
+        } else {
+          // No enabled models left in this provider. Fall back to another provider.
+          const fallback = getFallbackModel(state.providers, next);
+          set({ selectedModel: fallback });
+          persistSelectedModel(fallback);
+        }
+      }
+    }
+  },
+
+  isModelEnabled: (providerId, modelId) => {
+    return !get().disabledModels.has(`${providerId}:${modelId}`);
+  },
+
+  getEnabledModels: (providerId) => {
+    const state = get();
+    const provider = state.providers.find((p) => p.id === providerId);
+    if (!provider) {
+      return [];
+    }
+
+    return provider.models.filter((m) => !state.disabledModels.has(`${providerId}:${m.id}`));
   },
 
   loadProviderSyncKey: async () => {

@@ -2,12 +2,15 @@
 
 import {
   CheckCircleIcon,
+  ChevronDownIcon,
   CircleAlertIcon,
   Loader2Icon,
   RefreshCwIcon,
   XCircleIcon,
 } from "lucide-react";
+import { useState } from "react";
 import { Button } from "#components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "#components/ui/collapsible";
 import { Switch } from "#components/ui/switch";
 import type { SyncStatus } from "#lib/providerSync";
 import { cn } from "#lib/utils";
@@ -19,11 +22,13 @@ interface ProvidersListProps {
   providerSyncUnlocked: boolean;
   providerSyncStatus: SyncStatus;
   providerSyncPending: boolean;
+  disabledModels: Set<string>;
   onEdit: (provider: ProviderInfo) => void;
   onDelete: (provider: ProviderInfo) => void;
   onRefreshModels: (provider: ProviderInfo) => void;
   onSetDefault?: (provider: ProviderInfo) => void;
   onToggleSync?: (provider: ProviderInfo, enabled: boolean) => void;
+  onToggleModel: (providerId: string, modelId: string, enabled: boolean) => void;
 }
 
 export function ProvidersList({
@@ -32,11 +37,13 @@ export function ProvidersList({
   providerSyncUnlocked,
   providerSyncStatus,
   providerSyncPending,
+  disabledModels,
   onEdit,
   onDelete,
   onRefreshModels,
   onSetDefault,
   onToggleSync,
+  onToggleModel,
 }: ProvidersListProps) {
   if (providers.length === 0) {
     return (
@@ -50,40 +57,125 @@ export function ProvidersList({
   return (
     <div className="space-y-4">
       {providers.map((provider, index) => (
-        <div
+        <ProviderRow
           key={provider.id}
-          className={cn(
-            "group flex items-start justify-between gap-4",
-            index === 0 && "border-t pt-4",
-            index !== providers.length - 1 && "border-b pb-4",
-          )}
-        >
+          provider={provider}
+          providerSyncEnabled={providerSyncEnabled}
+          providerSyncUnlocked={providerSyncUnlocked}
+          providerSyncStatus={providerSyncStatus}
+          providerSyncPending={providerSyncPending}
+          disabledModels={disabledModels}
+          isFirst={index === 0}
+          isLast={index === providers.length - 1}
+          onEdit={onEdit}
+          onDelete={onDelete}
+          onRefreshModels={onRefreshModels}
+          onSetDefault={onSetDefault}
+          onToggleSync={onToggleSync}
+          onToggleModel={onToggleModel}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface ProviderRowProps {
+  provider: ProviderInfo;
+  providerSyncEnabled: boolean;
+  providerSyncUnlocked: boolean;
+  providerSyncStatus: SyncStatus;
+  providerSyncPending: boolean;
+  disabledModels: Set<string>;
+  isFirst: boolean;
+  isLast: boolean;
+  onEdit: (provider: ProviderInfo) => void;
+  onDelete: (provider: ProviderInfo) => void;
+  onRefreshModels: (provider: ProviderInfo) => void;
+  onSetDefault?: (provider: ProviderInfo) => void;
+  onToggleSync?: (provider: ProviderInfo, enabled: boolean) => void;
+  onToggleModel: (providerId: string, modelId: string, enabled: boolean) => void;
+}
+
+function ProviderRow({
+  provider,
+  providerSyncEnabled,
+  providerSyncUnlocked,
+  providerSyncStatus,
+  providerSyncPending,
+  disabledModels,
+  isFirst,
+  isLast,
+  onEdit,
+  onDelete,
+  onRefreshModels,
+  onSetDefault,
+  onToggleSync,
+  onToggleModel,
+}: ProviderRowProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  const enabledCount = provider.models.filter(
+    (m) => !disabledModels.has(`${provider.id}:${m.id}`),
+  ).length;
+  const hasModels = provider.models.length > 0;
+  const zeroEnabled = hasModels && enabledCount === 0 && !provider.isLoadingModels;
+
+  return (
+    <Collapsible open={expanded} onOpenChange={setExpanded}>
+      <div className={cn("group", isFirst && "border-t pt-4", !isLast && "border-b pb-4")}>
+        <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
-            <div className="flex items-center gap-2 text-base font-semibold">
-              <span className="truncate">{provider.label}</span>
-              {provider.isDefault && (
-                <span
-                  className={cn(
-                    "shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium",
-                    "bg-primary text-primary-foreground border-transparent",
-                  )}
+            <div className="flex items-center gap-2">
+              <CollapsibleTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-xs"
+                  className="shrink-0"
+                  aria-label={expanded ? "Collapse models" : "Expand models"}
                 >
-                  Default
-                </span>
-              )}
-              <ConnectionModeBadge mode={provider.connectionMode} />
-              <SyncStatusBadge
-                syncEnabled={provider.syncEnabled}
-                globalSyncEnabled={providerSyncEnabled}
-                globalUnlocked={providerSyncUnlocked}
-                globalStatus={providerSyncStatus}
-                isPending={providerSyncPending}
-              />
+                  <ChevronDownIcon
+                    className={cn("size-4 transition-transform", expanded && "rotate-180")}
+                  />
+                </Button>
+              </CollapsibleTrigger>
+              <div className="flex items-center gap-2 text-base font-semibold">
+                <span className="truncate">{provider.label}</span>
+                {provider.isDefault && (
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium",
+                      "bg-primary text-primary-foreground border-transparent",
+                    )}
+                  >
+                    Default
+                  </span>
+                )}
+                <ConnectionModeBadge mode={provider.connectionMode} />
+                <SyncStatusBadge
+                  syncEnabled={provider.syncEnabled}
+                  globalSyncEnabled={providerSyncEnabled}
+                  globalUnlocked={providerSyncUnlocked}
+                  globalStatus={providerSyncStatus}
+                  isPending={providerSyncPending}
+                />
+              </div>
             </div>
             <p className="truncate text-sm text-muted-foreground">{provider.baseUrl}</p>
             <p className="text-sm text-muted-foreground">
               API key: {provider.apiKey ? "••••••••" : "Not set"}
             </p>
+            {hasModels && !provider.isLoadingModels && (
+              <p className="text-xs text-muted-foreground">
+                {enabledCount} of {provider.models.length} model
+                {provider.models.length !== 1 ? "s" : ""} enabled
+              </p>
+            )}
+            {zeroEnabled && (
+              <p className="text-sm font-medium text-destructive">
+                All models are disabled. Enable at least one to use this provider.
+              </p>
+            )}
             {provider.modelsError && (
               <p className="text-sm text-destructive">{provider.modelsError}</p>
             )}
@@ -132,8 +224,44 @@ export function ProvidersList({
             )}
           </div>
         </div>
-      ))}
-    </div>
+
+        <CollapsibleContent>
+          <div className="mt-3 ml-8 space-y-1 rounded-md border bg-muted/30 p-3">
+            {provider.isLoadingModels && provider.models.length === 0 && (
+              <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
+                <Loader2Icon className="size-4 animate-spin" />
+                Loading models...
+              </div>
+            )}
+            {!provider.isLoadingModels && provider.models.length === 0 && !provider.modelsError && (
+              <p className="py-2 text-sm text-muted-foreground">
+                No models fetched yet. Click the refresh button to fetch models.
+              </p>
+            )}
+            {provider.modelsError && provider.models.length === 0 && (
+              <p className="py-2 text-sm text-destructive">
+                Failed to load models. Check your connection and API key.
+              </p>
+            )}
+            {provider.models.map((model) => {
+              const modelKey = `${provider.id}:${model.id}`;
+              const isEnabled = !disabledModels.has(modelKey);
+
+              return (
+                <div key={model.id} className="flex items-center justify-between gap-3 py-1.5">
+                  <span className="truncate text-sm">{model.name}</span>
+                  <Switch
+                    checked={isEnabled}
+                    onCheckedChange={(checked) => onToggleModel(provider.id, model.id, checked)}
+                    aria-label={`${isEnabled ? "Disable" : "Enable"} model ${model.name}`}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
   );
 }
 

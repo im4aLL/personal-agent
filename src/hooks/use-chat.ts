@@ -61,6 +61,7 @@ export function useChat() {
   const conversation = useChatStore(selectSelectedConversation);
   const providers = useChatStore((state) => state.providers);
   const selectedModel = useChatStore((state) => state.selectedModel);
+  const disabledModels = useChatStore((state) => state.disabledModels);
   const thinkingLevel = useChatStore((state) => state.thinkingLevel);
   const addMessage = useChatStore((state) => state.addMessage);
   const appendMessageContent = useChatStore((state) => state.appendMessageContent);
@@ -109,7 +110,11 @@ export function useChat() {
     [providers, selectedModel.providerId],
   );
 
-  const canSend = Boolean(activeProvider && !isOffline);
+  const canSend = Boolean(
+    activeProvider &&
+      !isOffline &&
+      !disabledModels.has(`${selectedModel.providerId}:${selectedModel.modelId}`),
+  );
 
   const stop = useCallback(() => {
     abortControllerRef.current?.abort();

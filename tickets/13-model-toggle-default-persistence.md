@@ -7,22 +7,22 @@ If the default model is later toggled off or removed, the app falls back to the 
 
 **Blocked by:** #5 - Provider management and model discovery
 
-**Status:** Todo
+**Status:** Done
 
 ## Tasks
 
 ### Model toggle list in settings
-- [ ] Per-provider model list UI: each model row has a toggle switch (enabled/disabled).
-- [ ] Persist enabled/disabled state per model per provider in localStorage (`personal-agent:disabled-models` or similar).
-- [ ] New models discovered on fetch default to enabled (opt-out).
-- [ ] Filter the model picker (message box, new-chat dropdown) to only show enabled models.
+- [x] Per-provider model list UI: each model row has a toggle switch (enabled/disabled).
+- [x] Persist enabled/disabled state per model per provider in localStorage (`personal-agent:disabled-models` or similar).
+- [x] New models discovered on fetch default to enabled (opt-out).
+- [x] Filter the model picker (message box, new-chat dropdown) to only show enabled models.
 
 ### Default model persistence
-- [ ] When user selects a model in the message box, persist it as `personal-agent:default-model` (provider + model ID).
-- [ ] New chats pre-select the persisted default model.
-- [ ] If the default model is toggled off, fall back to the first enabled model for that provider.
-- [ ] If a provider is removed, clear the default if it belonged to that provider.
+- [x] When user selects a model in the message box, persist it as `personal-agent:default-model` (provider + model ID).
+- [x] New chats pre-select the persisted default model.
+- [x] If the default model is toggled off, fall back to the first enabled model for that provider.
+- [x] If a provider is removed, clear the default if it belonged to that provider.
 
 ### Edge cases
-- [ ] Provider with zero enabled models: show a warning, disable sending until a model is enabled.
-- [ ] Changing providers in the message box resets the model selection to that provider's first enabled model (or the persisted default if it belongs to the new provider).
+- [x] Provider with zero enabled models: show a warning, disable sending until a model is enabled.
+- [x] Changing providers in the message box resets the model selection to that provider's first enabled model (or the persisted default if it belongs to the new provider).

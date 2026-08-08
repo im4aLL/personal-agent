@@ -33,6 +33,8 @@ export default function SettingsPage() {
   const providerSyncKey = useChatStore((state) => state.providerSyncKey);
   const providerSyncStatus = useChatStore((state) => state.providerSyncStatus);
   const providerSyncPending = useChatStore((state) => state.providerSyncPending);
+  const disabledModels = useChatStore((state) => state.disabledModels);
+  const toggleModelEnabled = useChatStore((state) => state.toggleModelEnabled);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null);
@@ -179,11 +181,13 @@ export default function SettingsPage() {
                   providerSyncUnlocked={providerSyncKey !== null}
                   providerSyncStatus={providerSyncStatus}
                   providerSyncPending={providerSyncPending}
+                  disabledModels={disabledModels}
                   onEdit={handleEdit}
                   onDelete={handleDelete}
                   onRefreshModels={handleRefreshModels}
                   onSetDefault={handleSetDefault}
                   onToggleSync={handleToggleProviderSync}
+                  onToggleModel={toggleModelEnabled}
                 />
 
                 <div className="flex items-center justify-between gap-4">
