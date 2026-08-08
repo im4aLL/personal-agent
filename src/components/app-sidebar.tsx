@@ -55,6 +55,12 @@ function differenceInCalendarDays(a: Date, b: Date) {
   return Math.floor((startOfDay(a).getTime() - startOfDay(b).getTime()) / (1000 * 60 * 60 * 24));
 }
 
+const MONTH_FORMAT = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long" });
+
+function formatMonthLabel(date: Date): string {
+  return MONTH_FORMAT.format(date);
+}
+
 function groupConversations(conversations: Conversation[]) {
   const now = new Date();
   const sorted = [...conversations].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
@@ -63,7 +69,6 @@ function groupConversations(conversations: Conversation[]) {
     ["Today", []],
     ["Yesterday", []],
     ["Previous 7 days", []],
-    ["Earlier", []],
   ]);
 
   for (const conversation of sorted) {
@@ -75,7 +80,11 @@ function groupConversations(conversations: Conversation[]) {
     } else if (days <= 7) {
       groups.get("Previous 7 days")?.push(conversation);
     } else {
-      groups.get("Earlier")?.push(conversation);
+      const monthLabel = formatMonthLabel(conversation.updatedAt);
+      if (!groups.has(monthLabel)) {
+        groups.set(monthLabel, []);
+      }
+      groups.get(monthLabel)?.push(conversation);
     }
   }
 
@@ -126,6 +135,7 @@ export function AppSidebar() {
   const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [tagsOpen, setTagsOpen] = useState(false);
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set());
   const editInputRef = useRef<HTMLInputElement>(null);
 
   const conversations = useChatStore((state) => state.conversations);
@@ -195,6 +205,86 @@ export function AppSidebar() {
   function cancelRename() {
     setEditingId(null);
     setEditDraft("");
+  }
+
+  function toggleMonth(label: string) {
+    setExpandedMonths((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) {
+        next.delete(label);
+      } else {
+        next.add(label);
+      }
+      return next;
+    });
+  }
+
+  function renderConversationItem(conversation: Conversation) {
+    const isEditing = editingId === conversation.id;
+
+    return (
+      <SidebarMenuItem key={conversation.id}>
+        {isEditing ? (
+          <div className="flex flex-1 items-center gap-2 px-2 py-1.5">
+            <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
+            <Input
+              ref={editInputRef}
+              value={editDraft}
+              onChange={(event) => setEditDraft(event.target.value)}
+              onBlur={() => commitRename(conversation.id)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  commitRename(conversation.id);
+                } else if (event.key === "Escape") {
+                  cancelRename();
+                }
+              }}
+              className="h-7 min-w-0 flex-1 px-2 py-1 text-sm"
+            />
+          </div>
+        ) : (
+          <>
+            <SidebarMenuButton
+              tooltip={conversation.title}
+              isActive={selectedConversationId === conversation.id}
+              onClick={() => {
+                selectConversation(conversation.id);
+                navigate("/");
+              }}
+              className="pr-14"
+            >
+              <MessageSquareIcon className="size-4" />
+              <span>{conversation.title}</span>
+            </SidebarMenuButton>
+            <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:opacity-100 focus-within:opacity-100 group-data-[collapsible=icon]:hidden">
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Rename ${conversation.title}`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  startRename(conversation);
+                }}
+              >
+                <PencilIcon className="size-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Delete ${conversation.title}`}
+                className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setDeleteTarget(conversation);
+                }}
+              >
+                <Trash2Icon className="size-3" />
+              </Button>
+            </div>
+          </>
+        )}
+      </SidebarMenuItem>
+    );
   }
 
   function handleDeleteConfirm() {
@@ -373,80 +463,50 @@ export function AppSidebar() {
 
         {pinnedConversations.length > 0 && unpinnedGroups.length > 0 && <SidebarSeparator />}
 
-        {unpinnedGroups.map(([label, items]) => (
-          <SidebarGroup key={label} className="py-1">
-            <SidebarGroupLabel>{label}</SidebarGroupLabel>
-            <SidebarMenu>
-              {items.map((conversation) => {
-                const isEditing = editingId === conversation.id;
+        {unpinnedGroups.map(([label, items]) => {
+          const isMonthGroup =
+            label !== "Today" && label !== "Yesterday" && label !== "Previous 7 days";
+          const isOpen = expandedMonths.has(label);
 
-                return (
-                  <SidebarMenuItem key={conversation.id}>
-                    {isEditing ? (
-                      <div className="flex flex-1 items-center gap-2 px-2 py-1.5">
-                        <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" />
-                        <Input
-                          ref={editInputRef}
-                          value={editDraft}
-                          onChange={(event) => setEditDraft(event.target.value)}
-                          onBlur={() => commitRename(conversation.id)}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              commitRename(conversation.id);
-                            } else if (event.key === "Escape") {
-                              cancelRename();
-                            }
-                          }}
-                          className="h-7 min-w-0 flex-1 px-2 py-1 text-sm"
-                        />
-                      </div>
-                    ) : (
-                      <>
-                        <SidebarMenuButton
-                          tooltip={conversation.title}
-                          isActive={selectedConversationId === conversation.id}
-                          onClick={() => {
-                            selectConversation(conversation.id);
-                            navigate("/");
-                          }}
-                          className="pr-14"
-                        >
-                          <MessageSquareIcon className="size-4" />
-                          <span>{conversation.title}</span>
-                        </SidebarMenuButton>
-                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:opacity-100 focus-within:opacity-100 group-data-[collapsible=icon]:hidden">
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`Rename ${conversation.title}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              startRename(conversation);
-                            }}
-                          >
-                            <PencilIcon className="size-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`Delete ${conversation.title}`}
-                            className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setDeleteTarget(conversation);
-                            }}
-                          >
-                            <Trash2Icon className="size-3" />
-                          </Button>
-                        </div>
-                      </>
-                    )}
-                  </SidebarMenuItem>
-                );
-              })}
-            </SidebarMenu>
-          </SidebarGroup>
-        ))}
+          const groupContent = (
+            <SidebarGroup className="py-1">
+              {isMonthGroup ? (
+                <CollapsibleTrigger asChild>
+                  <SidebarGroupLabel className="cursor-pointer hover:text-foreground">
+                    {label}
+                    <span className="ml-auto flex items-center gap-1">
+                      <span className="text-muted-foreground text-[10px]">{items.length}</span>
+                      <ChevronDownIcon
+                        className={`size-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-180" : ""}`}
+                      />
+                    </span>
+                  </SidebarGroupLabel>
+                </CollapsibleTrigger>
+              ) : (
+                <SidebarGroupLabel>{label}</SidebarGroupLabel>
+              )}
+              {isMonthGroup ? (
+                <CollapsibleContent>
+                  <SidebarMenu>
+                    {items.map((conversation) => renderConversationItem(conversation))}
+                  </SidebarMenu>
+                </CollapsibleContent>
+              ) : (
+                <SidebarMenu>
+                  {items.map((conversation) => renderConversationItem(conversation))}
+                </SidebarMenu>
+              )}
+            </SidebarGroup>
+          );
+
+          return isMonthGroup ? (
+            <Collapsible key={label} open={isOpen} onOpenChange={() => toggleMonth(label)}>
+              {groupContent}
+            </Collapsible>
+          ) : (
+            <div key={label}>{groupContent}</div>
+          );
+        })}
 
         {isHistoryLoading && (
           <div className="flex items-center justify-center px-4 py-6 text-sm text-muted-foreground">
