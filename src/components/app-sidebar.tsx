@@ -45,54 +45,6 @@ import {
   SidebarSeparator,
 } from "./ui/sidebar";
 
-function startOfDay(date: Date) {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
-
-function differenceInCalendarDays(a: Date, b: Date) {
-  return Math.floor((startOfDay(a).getTime() - startOfDay(b).getTime()) / (1000 * 60 * 60 * 24));
-}
-
-const TIME_LABELS = new Set(["Today", "Yesterday", "Previous 7 days"]);
-
-const MONTH_FORMAT = new Intl.DateTimeFormat("en-US", { year: "numeric", month: "long" });
-
-function formatMonthLabel(date: Date): string {
-  return MONTH_FORMAT.format(date);
-}
-
-function groupConversations(conversations: Conversation[]) {
-  const now = new Date();
-  const sorted = [...conversations].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-
-  const groups = new Map<string, typeof conversations>([
-    ["Today", []],
-    ["Yesterday", []],
-    ["Previous 7 days", []],
-  ]);
-
-  for (const conversation of sorted) {
-    const days = Math.max(0, differenceInCalendarDays(now, conversation.updatedAt));
-    if (days === 0) {
-      groups.get("Today")?.push(conversation);
-    } else if (days === 1) {
-      groups.get("Yesterday")?.push(conversation);
-    } else if (days <= 7) {
-      groups.get("Previous 7 days")?.push(conversation);
-    } else {
-      const monthLabel = formatMonthLabel(conversation.updatedAt);
-      if (!groups.has(monthLabel)) {
-        groups.set(monthLabel, []);
-      }
-      groups.get(monthLabel)?.push(conversation);
-    }
-  }
-
-  return Array.from(groups.entries()).filter(([, items]) => items.length > 0);
-}
-
 function DeleteConversationDialog({
   conversation,
   isOpen,
@@ -149,9 +101,15 @@ export function AppSidebar() {
   const createConversation = useChatStore((state) => state.createConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const today = useChatStore((state) => state.today);
+  const yesterday = useChatStore((state) => state.yesterday);
+  const previous7Days = useChatStore((state) => state.previous7Days);
   const monthGroups = useChatStore((state) => state.monthGroups);
   const monthConversations = useChatStore((state) => state.monthConversations);
+  const monthConversationLimits = useChatStore((state) => state.monthConversationLimits);
+  const monthsLoading = useChatStore((state) => state.monthsLoading);
   const loadMonthConversations = useChatStore((state) => state.loadMonthConversations);
+  const loadMoreMonthConversations = useChatStore((state) => state.loadMoreMonthConversations);
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(searchInput);
@@ -192,31 +150,67 @@ export function AppSidebar() {
     return { allTags: sorted, taggedCount: sorted.length };
   }, [conversations]);
 
+  // Build lookup from conversation id to full Conversation for sidebar rendering.
+  const conversationById = useMemo(() => {
+    const map = new Map<string, Conversation>();
+    for (const c of conversations) {
+      map.set(c.id, c);
+    }
+    return map;
+  }, [conversations]);
+
   const { pinnedConversations, unpinnedGroups } = useMemo(() => {
     const isSearching = searchQuery.trim().length > 0;
-    // Search results are ConversationSummary, convert to Conversation-like objects
-    // for rendering. They won't have messages but that's fine for sidebar display.
-    const searchConversations: Conversation[] = searchResults.map((s) => ({
-      ...s,
-      messages: [],
-    }));
-    let filtered = isSearching ? searchConversations : conversations;
-    if (selectedTag) {
-      filtered = filtered.filter((c) => c.tags.includes(selectedTag));
+
+    if (isSearching) {
+      // Search results are ConversationSummary; show them as a flat group.
+      const searchConversations: Conversation[] = searchResults.map((s) => ({
+        ...s,
+        messages: [],
+      }));
+      let filtered = selectedTag
+        ? searchConversations.filter((c) => c.tags.includes(selectedTag))
+        : searchConversations;
+      const pinned = filtered
+        .filter((c) => c.pinned)
+        .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+      const unpinned = filtered.filter((c) => !c.pinned);
+      return {
+        pinnedConversations: pinned,
+        unpinnedGroups:
+          unpinned.length > 0 ? ([["Search Results", unpinned]] as [string, Conversation[]][]) : [],
+      };
     }
-    const pinned = filtered
+
+    // Non-search mode: use pre-grouped store slices.
+    function resolveSlice(summaries: ConversationSummary[]) {
+      let items = summaries
+        .map((s) => conversationById.get(s.id))
+        .filter((c): c is Conversation => c != null);
+      if (selectedTag) {
+        items = items.filter((c) => c.tags.includes(selectedTag));
+      }
+      return items;
+    }
+
+    const todayItems = resolveSlice(today);
+    const yesterdayItems = resolveSlice(yesterday);
+    const previous7DaysItems = resolveSlice(previous7Days);
+
+    let pinned = conversations
       .filter((c) => c.pinned)
       .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
-    const unpinned = filtered.filter((c) => !c.pinned);
-    const allGroups = groupConversations(unpinned);
-    // Only keep Today/Yesterday/Previous 7 days from groupConversations.
-    // Month groups are rendered separately from store metadata.
-    const timeGroups = allGroups.filter(([label]) => TIME_LABELS.has(label));
-    return {
-      pinnedConversations: pinned,
-      unpinnedGroups: timeGroups,
-    };
-  }, [searchQuery, searchResults, conversations, selectedTag]);
+    if (selectedTag) {
+      pinned = pinned.filter((c) => c.tags.includes(selectedTag));
+    }
+
+    const groups: [string, Conversation[]][] = [];
+    if (todayItems.length > 0) groups.push(["Today", todayItems]);
+    if (yesterdayItems.length > 0) groups.push(["Yesterday", yesterdayItems]);
+    if (previous7DaysItems.length > 0) groups.push(["Previous 7 days", previous7DaysItems]);
+
+    return { pinnedConversations: pinned, unpinnedGroups: groups };
+  }, [searchQuery, searchResults, conversations, selectedTag, today, yesterday, previous7Days, conversationById]);
 
   // Build a label->month-key lookup from monthGroups.
   const labelToMonthKey = useMemo(() => {
@@ -548,10 +542,22 @@ export function AppSidebar() {
                   <CollapsibleContent>
                     <SidebarMenu>
                       {loadedItems.map((summary) => {
-                        // Find the full Conversation in the conversations array.
-                        const conversation = conversations.find((c) => c.id === summary.id);
+                        const conversation = conversationById.get(summary.id);
                         return conversation ? renderConversationItem(conversation) : null;
                       })}
+                      {monthConversationLimits[mg.month]?.hasMore && (
+                        <SidebarMenuItem>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-xs text-muted-foreground"
+                            disabled={monthsLoading.has(mg.month)}
+                            onClick={() => loadMoreMonthConversations(mg.month)}
+                          >
+                            {monthsLoading.has(mg.month) ? "Loading..." : "View more"}
+                          </Button>
+                        </SidebarMenuItem>
+                      )}
                     </SidebarMenu>
                   </CollapsibleContent>
                 </SidebarGroup>

@@ -63,8 +63,13 @@ export type ChatState = {
   historyError: string | null;
   messagesLoading: Set<string>;
   loadedConversationIds: Set<string>;
+  today: ConversationSummary[];
+  yesterday: ConversationSummary[];
+  previous7Days: ConversationSummary[];
   monthGroups: MonthGroup[];
   monthConversations: Record<string, ConversationSummary[]>;
+  monthConversationLimits: Record<string, { limit: number; hasMore: boolean }>;
+  monthsLoading: Set<string>;
   providerSyncEnabled: boolean;
   providerSyncKey: CryptoKey | null;
   providerSyncStatus: SyncStatus;
@@ -93,7 +98,8 @@ export type ChatState = {
   persistConversation: (conversationId: string) => void;
   loadHistory: () => Promise<void>;
   loadMessagesForConversation: (conversationId: string) => Promise<void>;
-  loadMonthConversations: (month: string) => Promise<void>;
+  loadMonthConversations: (month: string, limit?: number) => Promise<void>;
+  loadMoreMonthConversations: (month: string) => Promise<void>;
   addProvider: (input: ProviderInput) => void;
   updateProvider: (id: string, input: ProviderInput) => void;
   deleteProvider: (id: string) => void;
@@ -354,8 +360,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   historyError: null,
   messagesLoading: new Set(),
   loadedConversationIds: new Set(),
+  today: [],
+  yesterday: [],
+  previous7Days: [],
   monthGroups: [],
   monthConversations: {},
+  monthConversationLimits: {},
+  monthsLoading: new Set(),
   providerSyncEnabled: providerStorage.isProviderSyncEnabled(),
   providerSyncKey: null,
   providerSyncStatus: "never-synced",
@@ -613,22 +624,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       await runMigrations();
       const summaries = await loadConversationSummaries();
 
-      // Merge pinned + today + yesterday + previous7Days into a flat conversations array.
       // Each conversation gets an empty messages array - messages load lazily on select.
-      const allSummaries = [
-        ...summaries.pinned,
-        ...summaries.today,
-        ...summaries.yesterday,
-        ...summaries.previous7Days,
+      const conversations: Conversation[] = [
+        ...summaries.pinned.map((s) => ({ ...s, messages: [] })),
+        ...summaries.today.map((s) => ({ ...s, messages: [] })),
+        ...summaries.yesterday.map((s) => ({ ...s, messages: [] })),
+        ...summaries.previous7Days.map((s) => ({ ...s, messages: [] })),
       ];
-
-      const conversations: Conversation[] = allSummaries.map((summary) => ({
-        ...summary,
-        messages: [],
-      }));
 
       set({
         conversations,
+        today: summaries.today,
+        yesterday: summaries.yesterday,
+        previous7Days: summaries.previous7Days,
         monthGroups: summaries.monthGroups,
         isHistoryLoaded: true,
         isHistoryLoading: false,
@@ -696,14 +704,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  loadMonthConversations: async (month) => {
+  loadMonthConversations: async (month, limit = 50) => {
     const state = get();
 
-    // Already loaded.
-    if (state.monthConversations[month]) return;
+    // Already loaded with at least the default limit, or already loading.
+    if (state.monthsLoading.has(month)) return;
+    if (state.monthConversations[month] && limit <= 50) return;
+
+    set({ monthsLoading: new Set([...get().monthsLoading, month]) });
 
     try {
-      const summaries = await loadConversationsForMonth(month, 50);
+      const summaries = await loadConversationsForMonth(month, limit);
 
       // Convert summaries to full Conversation objects (with empty messages).
       const conversations: Conversation[] = summaries.map((s) => ({ ...s, messages: [] }));
@@ -719,10 +730,69 @@ export const useChatStore = create<ChatState>((set, get) => ({
             ...currentState.monthConversations,
             [month]: summaries,
           },
+          monthConversationLimits: {
+            ...currentState.monthConversationLimits,
+            [month]: { limit, hasMore: summaries.length === limit },
+          },
         };
       });
     } catch {
       // Silently fail - month group stays collapsed.
+    } finally {
+      set((currentState) => ({
+        monthsLoading: (() => {
+          const next = new Set(currentState.monthsLoading);
+          next.delete(month);
+          return next;
+        })(),
+      }));
+    }
+  },
+
+  loadMoreMonthConversations: async (month) => {
+    const state = get();
+    const current = state.monthConversationLimits[month];
+    if (!current || state.monthsLoading.has(month)) return;
+
+    set({ monthsLoading: new Set([...get().monthsLoading, month]) });
+
+    const newLimit = current.limit * 2;
+
+    try {
+      const summaries = await loadConversationsForMonth(month, newLimit);
+      const conversations: Conversation[] = summaries.map((s) => ({ ...s, messages: [] }));
+
+      set((currentState) => {
+        // Remove old unpinned month entries from conversations, keeping pinned ones.
+        const oldIds = new Set(
+          (currentState.monthConversations[month] ?? []).map((c) => c.id),
+        );
+        const filteredConversations = currentState.conversations.filter(
+          (c) => !(oldIds.has(c.id) && !c.pinned),
+        );
+
+        return {
+          conversations: [...filteredConversations, ...conversations],
+          monthConversations: {
+            ...currentState.monthConversations,
+            [month]: summaries,
+          },
+          monthConversationLimits: {
+            ...currentState.monthConversationLimits,
+            [month]: { limit: newLimit, hasMore: summaries.length === newLimit },
+          },
+        };
+      });
+    } catch {
+      // Silently fail.
+    } finally {
+      set((currentState) => ({
+        monthsLoading: (() => {
+          const next = new Set(currentState.monthsLoading);
+          next.delete(month);
+          return next;
+        })(),
+      }));
     }
   },
 

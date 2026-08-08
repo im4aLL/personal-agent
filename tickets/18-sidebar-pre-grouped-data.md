@@ -7,12 +7,12 @@ If 50 items are returned, a "View more" button doubles the limit and reloads.
 
 **Blocked by:** #17 - Lazy message loading with per-group queries.
 
-**Status:** Ready For Dev
+**Status:** Done
 
 ## Tasks
 
-- [ ] Remove `groupConversations` function from `app-sidebar.tsx`
-- [ ] Read structured data from the store: `today`, `yesterday`, `previous7Days`, `monthGroups`
-- [ ] Render month group headers from the metadata query (count already known from `monthGroups`)
-- [ ] Wire month expand to call `loadConversationsForMonth(month, 50)` in the store
-- [ ] Add "View more" button when the returned count equals the limit, doubling the limit on each click
+- [x] Remove `groupConversations` function from `app-sidebar.tsx`
+- [x] Read structured data from the store: `today`, `yesterday`, `previous7Days`, `monthGroups`
+- [x] Render month group headers from the metadata query (count already known from `monthGroups`)
+- [x] Wire month expand to call `loadConversationsForMonth(month, 50)` in the store
+- [x] Add "View more" button when the returned count equals the limit, doubling the limit on each click
