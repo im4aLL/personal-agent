@@ -176,12 +176,14 @@ function ThinkingSelector() {
   const thinkingLevel = useChatStore((state) => state.thinkingLevel);
   const setThinkingLevel = useChatStore((state) => state.setThinkingLevel);
 
+  const selectedLabel = `Thinking / ${THINKING_OPTIONS.find((option) => option.value === thinkingLevel)?.label ?? "Off"}`;
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button type="button" variant="ghost" size="sm" className="h-9 gap-1 px-2 text-xs">
           <BrainIcon className="size-3.5" />
-          Thinking
+          {selectedLabel}
           <ChevronDownIcon className="size-3 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
@@ -190,11 +192,6 @@ function ThinkingSelector() {
           value={thinkingLevel}
           onValueChange={(value) => {
             setThinkingLevel(value);
-            if (value !== "off") {
-              toast("Coming soon", {
-                description: "Thinking mode is not implemented yet.",
-              });
-            }
           }}
         >
           {THINKING_OPTIONS.map((option) => (

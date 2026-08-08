@@ -18,6 +18,13 @@ import {
 const MAX_STREAM_RETRIES = 2;
 const STREAM_RETRY_BASE_DELAY_MS = 1000;
 
+const THINKING_TO_REASONING: Record<string, "none" | "low" | "medium" | "high"> = {
+  off: "none",
+  low: "low",
+  medium: "medium",
+  high: "high",
+};
+
 function isRetryableStreamError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === "AbortError") return false;
   if (error instanceof TypeError && error.message.includes("fetch")) return true;
@@ -176,6 +183,9 @@ export function useChat() {
             model,
             messages,
             abortSignal: abortControllerRef.current.signal,
+            ...(thinkingLevel !== "off"
+              ? { reasoning: THINKING_TO_REASONING[thinkingLevel] ?? "medium" }
+              : {}),
           });
 
           for await (const part of fullStream) {
