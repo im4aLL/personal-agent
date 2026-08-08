@@ -10,6 +10,7 @@ All three are read-only system prompt injectors -- they shape how the AI respond
 - **Custom Agents**: Structured like skills with `{id, name, description, content}` where content is the agent's system prompt. Triggered the same way. Optional planner-agent routing for auto selection.
 
 **Trigger detection (priority order):**
+
 1. Slash command parsing: message starts with `/skillname` or `/agentname` -> activate matching item, strip command from content
 2. Explicit mention: "use the X skill", "run skill X" -> match against names
 3. Manual selection: dropdown/chip in message input to pick active skill/agent/instruction
@@ -29,7 +30,7 @@ All three are read-only system prompt injectors -- they shape how the AI respond
 - [x] Skills are one-shot: auto-deactivate after the assistant response completes
 - [x] Instructions persist across turns until manually deactivated
 - [x] Turso guard: all CRUD and load operations are no-ops when Turso is not configured
-- [ ] Verify: create instruction, skill, agent with Turso configured; they persist across restart
-- [ ] Verify: skill triggers via `/skillname`, injects content, deactivates after response
-- [ ] Verify: instruction stays active across multiple messages until cleared
-- [ ] Verify: without Turso configured, Agents tab shows "Configure Turso first" empty state
+- [x] Verify: create instruction, skill, agent with Turso configured; they persist across restart
+- [x] Verify: skill triggers via `/skillname`, injects content, deactivates after response
+- [x] Verify: instruction stays active across multiple messages until cleared
+- [x] Verify: without Turso configured, Agents tab shows "Configure Turso first" empty state

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use futures_util::StreamExt;
 use tauri::ipc::Channel;
 use tauri::State;
@@ -39,6 +41,48 @@ pub enum StreamChunk {
 
 #[derive(Default)]
 pub struct StreamState(pub Mutex<HashMap<String, oneshot::Sender<()>>>);
+
+#[tauri::command]
+pub async fn proxy_bytes(request: ProxyRequest) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let method = request
+        .method
+        .parse::<reqwest::Method>()
+        .map_err(|error| error.to_string())?;
+
+    let mut builder = client.request(method, &request.url);
+
+    for (key, value) in request.headers {
+        builder = builder.header(key, value);
+    }
+
+    if let Some(body) = request.body {
+        builder = builder.body(body);
+    }
+
+    let response = builder.send().await.map_err(|error| error.to_string())?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+
+    let content_type = response
+        .headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("application/octet-stream")
+        .to_string();
+
+    let bytes = response.bytes().await.map_err(|error| error.to_string())?;
+
+    let encoded = BASE64.encode(&bytes);
+    let result = serde_json::json!({
+        "data": encoded,
+        "contentType": content_type,
+    });
+
+    Ok(result.to_string())
+}
 
 #[tauri::command]
 pub async fn proxy(request: ProxyRequest) -> Result<ProxyResponse, String> {

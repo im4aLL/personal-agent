@@ -4,6 +4,7 @@ import {
   AlertCircleIcon,
   BotIcon,
   CopyIcon,
+  DownloadIcon,
   FileTextIcon,
   ImageIcon,
   Loader2Icon,
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 import { Button } from "#components/ui/button";
 import { Textarea } from "#components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#components/ui/tooltip";
+import { downloadString } from "#lib/download";
 import type { Message } from "#lib/types/chat";
 import { cn } from "#lib/utils";
 import { Markdown } from "./markdown";
@@ -90,6 +92,22 @@ export function MessageBubble({
       handleEditSave();
     } else if (event.key === "Escape") {
       handleEditCancel();
+    }
+  }
+
+  async function handleDownload() {
+    const timestamp = new Date(message.createdAt)
+      .toISOString()
+      .replace(/[:.]/g, "-")
+      .slice(0, 19);
+    const filename = `response-${timestamp}`;
+    try {
+      const saved = await downloadString(message.content, filename, "text/markdown");
+      if (saved) {
+        toast.success("Downloaded as Markdown");
+      }
+    } catch {
+      toast.error("Failed to download");
     }
   }
 
@@ -244,6 +262,22 @@ export function MessageBubble({
                 </TooltipTrigger>
                 <TooltipContent>{copied ? "Copied" : "Copy"}</TooltipContent>
               </Tooltip>
+
+              {!isUser && !isError && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label="Download as Markdown"
+                      onClick={handleDownload}
+                    >
+                      <DownloadIcon className="size-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Download .md</TooltipContent>
+                </Tooltip>
+              )}
 
               {!isUser && isError && onRetry && (
                 <Tooltip>

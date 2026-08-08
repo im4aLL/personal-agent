@@ -1,12 +1,13 @@
 "use client";
 
-import { CheckIcon, CopyIcon } from "lucide-react";
-import { useState } from "react";
+import { CheckIcon, CopyIcon, DownloadIcon, ExternalLinkIcon } from "lucide-react";
+import { type ReactNode, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import { toast } from "sonner";
 import { Button } from "#components/ui/button";
+import { downloadImage, downloadViaProxy, sanitizeFilename } from "#lib/download";
 import { cn } from "#lib/utils";
 
 interface MarkdownProps {
@@ -14,7 +15,7 @@ interface MarkdownProps {
   className?: string;
 }
 
-function CodeBlock({ children, className }: { children: React.ReactNode; className?: string }) {
+function CodeBlock({ children, className }: { children: ReactNode; className?: string }) {
   const [copied, setCopied] = useState(false);
   const language = /language-(\w+)/.exec(className ?? "")?.[1];
 
@@ -51,6 +52,83 @@ function CodeBlock({ children, className }: { children: React.ReactNode; classNa
   );
 }
 
+const FILE_EXTENSIONS = /\.(pdf|zip|gz|tar|xz|7z|rar|docx?|xlsx?|pptx?|epub|mp[34]|mov|avi|mkv|wav|flac)$/i;
+
+function ImageWithDownload({ src, alt }: { src?: string; alt?: string }) {
+  const handleDownload = async () => {
+    if (!src) return;
+
+    const baseName = sanitizeFilename(alt ?? "image");
+
+    try {
+      const saved = await downloadImage(src, baseName);
+      if (saved) {
+        toast.success("Image saved");
+      }
+    } catch {
+      toast.error("Failed to download image");
+    }
+  };
+
+  return (
+    <span className="inline-block relative group/img my-2">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt={alt} className="max-w-full rounded-lg" />
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Download image"
+        onClick={handleDownload}
+        className="absolute top-2 right-2 z-10 opacity-0 group-hover/img:opacity-100 focus-visible:opacity-100 transition-opacity bg-background/80 hover:bg-background"
+      >
+        <DownloadIcon className="size-3" />
+      </Button>
+    </span>
+  );
+}
+
+function LinkRenderer({ href, children }: { href?: string; children?: ReactNode }) {
+  const handleClick = async (event: React.MouseEvent) => {
+    if (!href) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (FILE_EXTENSIONS.test(href)) {
+      try {
+        const urlParts = href.split("/");
+        const rawName = urlParts[urlParts.length - 1] ?? "download";
+        const saved = await downloadViaProxy(href, decodeURIComponent(rawName));
+        if (saved) {
+          toast.success("File saved");
+        }
+      } catch {
+        toast.error("Failed to download file");
+      }
+      return;
+    }
+
+    try {
+      const { openUrl } = await import("@tauri-apps/plugin-opener");
+      await openUrl(href);
+    } catch {
+      window.open(href, "_blank", "noopener,noreferrer");
+    }
+  };
+
+  return (
+    <a
+      href={href}
+      onClick={handleClick}
+      className="inline-flex items-center gap-0.5 text-primary underline underline-offset-2 hover:opacity-80 cursor-pointer"
+    >
+      {children}
+      <ExternalLinkIcon className="inline size-3 shrink-0" />
+    </a>
+  );
+}
+
 function CodeComponent({
   inline,
   className,
@@ -81,6 +159,8 @@ export function Markdown({ children, className }: MarkdownProps) {
             return <>{children}</>;
           },
           code: CodeComponent,
+          img: ImageWithDownload,
+          a: LinkRenderer,
         }}
       >
         {children}
