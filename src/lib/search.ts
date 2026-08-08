@@ -4,11 +4,8 @@ export function searchConversations(conversations: Conversation[], query: string
   const lowerQuery = query.trim().toLowerCase();
   if (!lowerQuery) return conversations;
 
-  return conversations.filter((conversation) => {
-    if (conversation.title.toLowerCase().includes(lowerQuery)) return true;
-
-    return conversation.messages.some((message) =>
-      message.content.toLowerCase().includes(lowerQuery),
-    );
-  });
+  return conversations.filter((conversation) =>
+    conversation.title.toLowerCase().includes(lowerQuery) ||
+    conversation.tags.some((tag) => tag.toLowerCase().includes(lowerQuery)),
+  );
 }

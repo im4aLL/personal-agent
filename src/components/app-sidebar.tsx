@@ -26,7 +26,7 @@ import {
   DialogTitle,
 } from "#components/ui/dialog";
 import { Input } from "#components/ui/input";
-import { searchConversations } from "#lib/search";
+import { searchConversations } from "#lib/turso-repository";
 import type { Conversation } from "#lib/types/chat";
 import { useChatStore } from "#store/chat";
 import { version } from "../../package.json";
@@ -130,6 +130,7 @@ export function AppSidebar() {
   const navigate = useNavigate();
   const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Conversation[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Conversation | null>(null);
@@ -153,6 +154,24 @@ export function AppSidebar() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      setSearchResults([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    searchConversations(trimmed).then((results) => {
+      if (!cancelled) setSearchResults(results);
+    }).catch(() => {
+      if (!cancelled) setSearchResults([]);
+    });
+
+    return () => { cancelled = true; };
+  }, [searchQuery]);
+
   const { allTags, taggedCount } = useMemo(() => {
     const counts = new Map<string, number>();
     for (const conversation of conversations) {
@@ -165,7 +184,8 @@ export function AppSidebar() {
   }, [conversations]);
 
   const { pinnedConversations, unpinnedGroups } = useMemo(() => {
-    let filtered = searchConversations(conversations, searchQuery.trim());
+    const isSearching = searchQuery.trim().length > 0;
+    let filtered = isSearching ? searchResults : conversations;
     if (selectedTag) {
       filtered = filtered.filter((c) => c.tags.includes(selectedTag));
     }
@@ -177,7 +197,7 @@ export function AppSidebar() {
       pinnedConversations: pinned,
       unpinnedGroups: groupConversations(unpinned),
     };
-  }, [searchQuery, conversations, selectedTag]);
+  }, [searchQuery, searchResults, conversations, selectedTag]);
 
   function handleNewChat() {
     createConversation(true);

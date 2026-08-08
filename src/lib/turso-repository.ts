@@ -305,6 +305,44 @@ export async function truncateMessages(conversationId: string, messageId: string
   ]);
 }
 
+export async function searchConversations(query: string): Promise<Conversation[]> {
+  const config = getTursoConfig();
+  if (!config || !query.trim()) return loadConversations();
+
+  const likeQuery = `%${query.trim()}%`;
+
+  const convRows = await tursoSelect<TursoConversationRow>(
+    `SELECT id, title, pinned, tags, created_at, updated_at FROM conversations
+     WHERE title LIKE ? OR tags LIKE ?
+     ORDER BY updated_at DESC`,
+    [likeQuery, likeQuery],
+  );
+
+  return convRows.map((row) => {
+    let tags: string[] = [];
+    if (row.tags) {
+      try {
+        const parsed = JSON.parse(row.tags);
+        if (Array.isArray(parsed) && parsed.every((t) => typeof t === "string")) {
+          tags = parsed;
+        }
+      } catch {
+        // Ignore malformed JSON.
+      }
+    }
+
+    return {
+      id: row.id,
+      title: row.title,
+      messages: [],
+      pinned: row.pinned === 1,
+      tags,
+      createdAt: new Date(row.created_at),
+      updatedAt: new Date(row.updated_at),
+    };
+  });
+}
+
 export async function deleteMessage(messageId: string): Promise<void> {
   await tursoExecute("DELETE FROM messages WHERE id = ?", [messageId]);
 }
