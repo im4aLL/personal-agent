@@ -183,9 +183,9 @@ export function useChat() {
             model,
             messages,
             abortSignal: abortControllerRef.current.signal,
-            ...(thinkingLevel !== "off"
-              ? { reasoning: THINKING_TO_REASONING[thinkingLevel] ?? "medium" }
-              : {}),
+            reasoning: thinkingLevel !== "off"
+              ? (THINKING_TO_REASONING[thinkingLevel] ?? "medium")
+              : "none",
           });
 
           for await (const part of fullStream) {

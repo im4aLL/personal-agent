@@ -35,6 +35,8 @@ export default function SettingsPage() {
   const providerSyncPending = useChatStore((state) => state.providerSyncPending);
   const disabledModels = useChatStore((state) => state.disabledModels);
   const toggleModelEnabled = useChatStore((state) => state.toggleModelEnabled);
+  const setProviderModelsEnabled = useChatStore((state) => state.setProviderModelsEnabled);
+  const setAllModelsEnabled = useChatStore((state) => state.setAllModelsEnabled);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ProviderInfo | null>(null);
@@ -188,6 +190,8 @@ export default function SettingsPage() {
                   onSetDefault={handleSetDefault}
                   onToggleSync={handleToggleProviderSync}
                   onToggleModel={toggleModelEnabled}
+                  onSetAllModelsEnabled={setAllModelsEnabled}
+                  onSetProviderModelsEnabled={setProviderModelsEnabled}
                 />
 
                 <div className="flex items-center justify-between gap-4">

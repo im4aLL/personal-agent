@@ -29,6 +29,23 @@ interface ProvidersListProps {
   onSetDefault?: (provider: ProviderInfo) => void;
   onToggleSync?: (provider: ProviderInfo, enabled: boolean) => void;
   onToggleModel: (providerId: string, modelId: string, enabled: boolean) => void;
+  onSetAllModelsEnabled: (enabled: boolean) => void;
+  onSetProviderModelsEnabled: (providerId: string, enabled: boolean) => void;
+}
+
+function allModelsState(
+  providers: ProviderInfo[],
+  disabledModels: Set<string>,
+): { total: number; enabled: number; allEnabled: boolean } {
+  let total = 0;
+  let enabled = 0;
+  for (const provider of providers) {
+    for (const model of provider.models) {
+      total++;
+      if (!disabledModels.has(`${provider.id}:${model.id}`)) enabled++;
+    }
+  }
+  return { total, enabled, allEnabled: total > 0 && enabled === total };
 }
 
 export function ProvidersList({
@@ -44,6 +61,8 @@ export function ProvidersList({
   onSetDefault,
   onToggleSync,
   onToggleModel,
+  onSetAllModelsEnabled,
+  onSetProviderModelsEnabled,
 }: ProvidersListProps) {
   if (providers.length === 0) {
     return (
@@ -54,8 +73,25 @@ export function ProvidersList({
     );
   }
 
+  const { total, enabled, allEnabled } = allModelsState(providers, disabledModels);
+
   return (
     <div className="space-y-4">
+      {total > 0 && (
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">
+            {enabled} of {total} model{total !== 1 ? "s" : ""} enabled globally
+          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">All</span>
+            <Switch
+              checked={allEnabled}
+              onCheckedChange={onSetAllModelsEnabled}
+              aria-label="Toggle all models"
+            />
+          </div>
+        </div>
+      )}
       {providers.map((provider, index) => (
         <ProviderRow
           key={provider.id}
@@ -73,6 +109,7 @@ export function ProvidersList({
           onSetDefault={onSetDefault}
           onToggleSync={onToggleSync}
           onToggleModel={onToggleModel}
+          onSetProviderModelsEnabled={onSetProviderModelsEnabled}
         />
       ))}
     </div>
@@ -94,6 +131,7 @@ interface ProviderRowProps {
   onSetDefault?: (provider: ProviderInfo) => void;
   onToggleSync?: (provider: ProviderInfo, enabled: boolean) => void;
   onToggleModel: (providerId: string, modelId: string, enabled: boolean) => void;
+  onSetProviderModelsEnabled: (providerId: string, enabled: boolean) => void;
 }
 
 function ProviderRow({
@@ -111,6 +149,7 @@ function ProviderRow({
   onSetDefault,
   onToggleSync,
   onToggleModel,
+  onSetProviderModelsEnabled,
 }: ProviderRowProps) {
   const [expanded, setExpanded] = useState(false);
 
@@ -227,6 +266,21 @@ function ProviderRow({
 
         <CollapsibleContent>
           <div className="mt-3 ml-8 space-y-1 rounded-md border bg-muted/30 p-3">
+            {provider.models.length > 1 && (
+              <div className="flex items-center justify-between pb-2">
+                <span className="text-xs text-muted-foreground">
+                  {enabledCount} of {provider.models.length} enabled
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">All</span>
+                  <Switch
+                    checked={enabledCount === provider.models.length}
+                    onCheckedChange={(checked) => onSetProviderModelsEnabled(provider.id, checked)}
+                    aria-label={`Toggle all models for ${provider.label}`}
+                  />
+                </div>
+              </div>
+            )}
             {provider.isLoadingModels && provider.models.length === 0 && (
               <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
                 <Loader2Icon className="size-4 animate-spin" />

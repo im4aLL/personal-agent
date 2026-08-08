@@ -6,6 +6,7 @@ import {
   ChevronDownIcon,
   Loader2Icon,
   PaperclipIcon,
+  SearchIcon,
   SquareIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "#components/ui/dropdown-menu";
+import { Input } from "#components/ui/input";
 import { Textarea } from "#components/ui/textarea";
 import { useChat } from "#hooks/use-chat";
 import { useChatStore } from "#store/chat";
@@ -42,6 +44,7 @@ function ModelSelector() {
   const refreshProviderModels = useChatStore((state) => state.refreshProviderModels);
   const disabledModels = useChatStore((state) => state.disabledModels);
   const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
   const options = useMemo(
     () =>
@@ -61,6 +64,17 @@ function ModelSelector() {
     [providers, disabledModels],
   );
 
+  const filteredOptions = useMemo(() => {
+    if (!search.trim()) return options;
+    const lower = search.toLowerCase();
+    return options.filter(
+      (option) =>
+        option.modelId.toLowerCase().includes(lower) ||
+        option.providerName.toLowerCase().includes(lower) ||
+        option.label.toLowerCase().includes(lower),
+    );
+  }, [options, search]);
+
   const providersNeedingRefresh = useMemo(
     () =>
       providers.filter(
@@ -70,6 +84,14 @@ function ModelSelector() {
     [providers],
   );
 
+  const visibleProviders = useMemo(
+    () =>
+      providers.filter((provider) =>
+        filteredOptions.some((option) => option.providerId === provider.id),
+      ),
+    [providers, filteredOptions],
+  );
+
   const selectedValue = `${selectedModel.providerId}:${selectedModel.modelId}`;
   const selectedLabel =
     options.find((option) => option.value === selectedValue)?.label ?? "Select model";
@@ -77,6 +99,7 @@ function ModelSelector() {
 
   useEffect(() => {
     if (!isOpen) {
+      setSearch("");
       return;
     }
 
@@ -99,12 +122,41 @@ function ModelSelector() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+        <div className="px-2 py-1.5">
+          <div className="relative">
+            <SearchIcon className="absolute left-2 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              className="h-7 pl-7 text-xs"
+              placeholder="Search models..."
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  const first = filteredOptions[0];
+                  if (first) {
+                    setSelectedModel(first.providerId, first.modelId);
+                    setIsOpen(false);
+                  }
+                }
+              }}
+            />
+          </div>
+        </div>
+        <DropdownMenuSeparator />
         {providers.length === 0 ? (
           <DropdownMenuLabel>No providers configured</DropdownMenuLabel>
+        ) : filteredOptions.length === 0 ? (
+          <DropdownMenuLabel>No models match your search</DropdownMenuLabel>
         ) : (
-          providers.map((provider) => {
+          visibleProviders.map((provider, index) => {
+            const providerModels = filteredOptions.filter(
+              (option) => option.providerId === provider.id,
+            );
             const enabledModels = provider.models.filter(
-              (m) => !disabledModels.has(`${provider.id}:${m.id}`),
+              (m) =>
+                !disabledModels.has(`${provider.id}:${m.id}`) &&
+                providerModels.some((option) => option.modelId === m.id),
             );
             const hasModels = provider.models.length > 0;
             const hasEnabledModels = enabledModels.length > 0;
@@ -162,7 +214,7 @@ function ModelSelector() {
                   !provider.modelsError && (
                     <DropdownMenuItem disabled>No models found</DropdownMenuItem>
                   )}
-                <DropdownMenuSeparator />
+                {index < visibleProviders.length - 1 && <DropdownMenuSeparator />}
               </DropdownMenuGroup>
             );
           })

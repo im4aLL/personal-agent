@@ -96,6 +96,8 @@ export type ChatState = {
   ) => Promise<providerSync.MergeResult>;
   loadProviderSyncKey: () => Promise<void>;
   toggleModelEnabled: (providerId: string, modelId: string, enabled: boolean) => void;
+  setProviderModelsEnabled: (providerId: string, enabled: boolean) => void;
+  setAllModelsEnabled: (enabled: boolean) => void;
   isModelEnabled: (providerId: string, modelId: string) => boolean;
   getEnabledModels: (providerId: string) => ModelInfo[];
 };
@@ -805,6 +807,49 @@ export const useChatStore = create<ChatState>((set, get) => ({
         }
       }
     }
+  },
+
+  setProviderModelsEnabled: (providerId, enabled) => {
+    const state = get();
+    const provider = state.providers.find((p) => p.id === providerId);
+    if (!provider || provider.models.length === 0) return;
+
+    const next = new Set(state.disabledModels);
+    for (const model of provider.models) {
+      const key = `${providerId}:${model.id}`;
+      if (enabled) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+    }
+
+    set({ disabledModels: next });
+    saveDisabledModels(next);
+  },
+
+  setAllModelsEnabled: (enabled) => {
+    const state = get();
+    const allModelKeys: string[] = [];
+    for (const provider of state.providers) {
+      for (const model of provider.models) {
+        allModelKeys.push(`${provider.id}:${model.id}`);
+      }
+    }
+
+    if (allModelKeys.length === 0) return;
+
+    const next = new Set(state.disabledModels);
+    for (const key of allModelKeys) {
+      if (enabled) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+    }
+
+    set({ disabledModels: next });
+    saveDisabledModels(next);
   },
 
   isModelEnabled: (providerId, modelId) => {
