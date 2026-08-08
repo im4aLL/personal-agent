@@ -12,6 +12,7 @@ export function ChatArea() {
   const conversations = useChatStore((state) => state.conversations);
   const providers = useChatStore((state) => state.providers);
   const setConversationTags = useChatStore((state) => state.setConversationTags);
+  const togglePin = useChatStore((state) => state.togglePin);
 
   const existingTags = useMemo(() => {
     const all = new Set<string>();
@@ -31,9 +32,11 @@ export function ChatArea() {
     <div className="flex min-h-0 flex-1 flex-col min-w-0">
       <ChatHeader
         title={selectedConversation.title}
+        pinned={selectedConversation.pinned}
         tags={selectedConversation.tags}
         existingTags={existingTags}
         onTagsChange={(tags) => setConversationTags(selectedConversation.id, tags)}
+        onTogglePin={() => togglePin(selectedConversation.id)}
       />
       <div className="min-h-0 flex-1 flex flex-col w-full px-4 pb-8">
         <MessageList conversation={selectedConversation} />

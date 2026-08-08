@@ -12,7 +12,7 @@ import {
   UserIcon,
   XIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "#components/ui/button";
 import { Textarea } from "#components/ui/textarea";
@@ -44,16 +44,27 @@ export function MessageBubble({
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editValue, setEditValue] = useState(message.content);
+  const lastSelectedRef = useRef("");
 
-  async function handleCopy() {
+  async function handleCopy(text?: string) {
+    const toCopy = text ?? message.content;
     try {
-      await navigator.clipboard.writeText(message.content);
+      await navigator.clipboard.writeText(toCopy);
       setCopied(true);
       toast.success("Copied to clipboard");
       setTimeout(() => setCopied(false), 2000);
     } catch {
       toast.error("Failed to copy");
     }
+  }
+
+  function handleTextSelection() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed) return;
+    const selectedText = selection.toString().trim();
+    if (!selectedText || selectedText === lastSelectedRef.current) return;
+    lastSelectedRef.current = selectedText;
+    handleCopy(selectedText);
   }
 
   function handleEditStart() {
@@ -83,14 +94,19 @@ export function MessageBubble({
   }
 
   return (
-    <div className={cn("group/message flex gap-3 py-4", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex gap-3 py-4", isUser ? "justify-end" : "justify-start")}>
       {!isUser && (
         <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
           <BotIcon className="size-4" />
         </div>
       )}
 
-      <div className={cn("flex max-w-[85%] flex-col gap-1", isUser ? "items-end" : "items-start")}>
+      <div
+        className={cn(
+          "group/message flex max-w-[85%] flex-col gap-1",
+          isUser ? "items-end" : "items-start",
+        )}
+      >
         {isEditing && isUser ? (
           <div className="flex w-full min-w-64 flex-col gap-2">
             <Textarea
@@ -116,12 +132,19 @@ export function MessageBubble({
           <>
             <div
               className={cn(
-                "relative rounded-2xl px-4 py-3",
+                "relative rounded-2xl px-4 py-3 cursor-text select-text",
                 isUser
                   ? "bg-primary text-primary-foreground rounded-br-sm dark:bg-secondary-foreground/15 dark:text-secondary-foreground"
                   : "bg-secondary text-secondary-foreground rounded-bl-sm",
                 isError && "border border-destructive/50 bg-destructive/10",
               )}
+              onMouseUp={handleTextSelection}
+              onKeyUp={(event) => {
+                // Ctrl+C / Cmd+C also counts as selection-then-copy
+                if ((event.ctrlKey || event.metaKey) && event.key === "c") {
+                  handleTextSelection();
+                }
+              }}
             >
               {isError && (
                 <div className="mb-2 flex items-center gap-1.5 text-sm font-medium text-destructive">
@@ -187,7 +210,8 @@ export function MessageBubble({
 
             <div
               className={cn(
-                "flex items-center gap-0.5 opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100",
+                "flex items-center gap-0.5 opacity-0 transition-opacity",
+                "group-hover/message:opacity-100",
               )}
             >
               {isUser && onEdit && (
@@ -213,7 +237,7 @@ export function MessageBubble({
                     variant="ghost"
                     size="icon-xs"
                     aria-label={copied ? "Copied" : "Copy message"}
-                    onClick={handleCopy}
+                    onClick={() => handleCopy()}
                   >
                     <CopyIcon className="size-3" />
                   </Button>

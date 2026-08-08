@@ -6,7 +6,6 @@ import {
   MessageSquareIcon,
   PencilIcon,
   PinIcon,
-  PinOffIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
@@ -138,8 +137,6 @@ export function AppSidebar() {
   const createConversation = useChatStore((state) => state.createConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
-  const togglePin = useChatStore((state) => state.togglePin);
-
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchQuery(searchInput);
@@ -356,17 +353,6 @@ export function AppSidebar() {
                           <Button
                             variant="ghost"
                             size="icon-xs"
-                            aria-label={`Unpin ${conversation.title}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              togglePin(conversation.id);
-                            }}
-                          >
-                            <PinOffIcon className="size-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
                             aria-label={`Delete ${conversation.title}`}
                             className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                             onClick={(event) => {
@@ -440,17 +426,6 @@ export function AppSidebar() {
                             }}
                           >
                             <PencilIcon className="size-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon-xs"
-                            aria-label={`Pin ${conversation.title}`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              togglePin(conversation.id);
-                            }}
-                          >
-                            <PinIcon className="size-3" />
                           </Button>
                           <Button
                             variant="ghost"
