@@ -71,6 +71,7 @@ export type ChatState = {
   createConversation: (selectAfterCreate?: boolean) => string;
   renameConversation: (id: string, title: string) => void;
   deleteConversation: (id: string) => void;
+  togglePin: (id: string) => void;
   setConversationTitle: (id: string, title: string) => void;
   addMessage: (conversationId: string, message: Message) => void;
   appendMessageContent: (conversationId: string, messageId: string, delta: string) => void;
@@ -354,6 +355,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       id,
       title: DEFAULT_CONVERSATION_TITLE,
       messages: [],
+      pinned: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -424,6 +426,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
         title: trimmed || conversation.title,
       })),
     }));
+  },
+
+  togglePin: (id) => {
+    set((state) => {
+      const nextConversations = updateConversation(state, id, (conversation) => ({
+        ...conversation,
+        pinned: !conversation.pinned,
+      }));
+
+      if (isTursoConfigured()) {
+        const updated = nextConversations.find((c) => c.id === id);
+        if (updated) {
+          void saveConversation(updated);
+        }
+      }
+
+      return { conversations: nextConversations };
+    });
   },
 
   setSelectedModel: (providerId, modelId) => {

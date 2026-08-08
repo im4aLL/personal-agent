@@ -4,6 +4,8 @@ import {
   Loader2Icon,
   MessageSquareIcon,
   PencilIcon,
+  PinIcon,
+  PinOffIcon,
   PlusIcon,
   SearchIcon,
   SettingsIcon,
@@ -38,6 +40,7 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarSeparator,
 } from "./ui/sidebar";
 
 function startOfDay(date: Date) {
@@ -129,6 +132,7 @@ export function AppSidebar() {
   const createConversation = useChatStore((state) => state.createConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
+  const togglePin = useChatStore((state) => state.togglePin);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -137,9 +141,16 @@ export function AppSidebar() {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  const filteredGroups = useMemo(() => {
+  const { pinnedConversations, unpinnedGroups } = useMemo(() => {
     const filtered = searchConversations(conversations, searchQuery.trim());
-    return groupConversations(filtered);
+    const pinned = filtered
+      .filter((c) => c.pinned)
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime());
+    const unpinned = filtered.filter((c) => !c.pinned);
+    return {
+      pinnedConversations: pinned,
+      unpinnedGroups: groupConversations(unpinned),
+    };
   }, [searchQuery, conversations]);
 
   function handleNewChat() {
@@ -215,7 +226,95 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
 
-        {filteredGroups.map(([label, items]) => (
+        {pinnedConversations.length > 0 && (
+          <SidebarGroup className="py-1">
+            <SidebarGroupLabel>Pinned</SidebarGroupLabel>
+            <SidebarMenu>
+              {pinnedConversations.map((conversation) => {
+                const isEditing = editingId === conversation.id;
+
+                return (
+                  <SidebarMenuItem key={conversation.id}>
+                    {isEditing ? (
+                      <div className="flex flex-1 items-center gap-2 px-2 py-1.5">
+                        <PinIcon className="size-4 shrink-0 text-muted-foreground" />
+                        <Input
+                          ref={editInputRef}
+                          value={editDraft}
+                          onChange={(event) => setEditDraft(event.target.value)}
+                          onBlur={() => commitRename(conversation.id)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              commitRename(conversation.id);
+                            } else if (event.key === "Escape") {
+                              cancelRename();
+                            }
+                          }}
+                          className="h-7 min-w-0 flex-1 px-2 py-1 text-sm"
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <SidebarMenuButton
+                          tooltip={conversation.title}
+                          isActive={selectedConversationId === conversation.id}
+                          onClick={() => {
+                            selectConversation(conversation.id);
+                            navigate("/");
+                          }}
+                          className="pr-14"
+                        >
+                          <PinIcon className="size-4" />
+                          <span>{conversation.title}</span>
+                        </SidebarMenuButton>
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-0.5 opacity-0 transition-opacity group-hover/menu-item:opacity-100 focus-within:opacity-100 group-data-[collapsible=icon]:hidden">
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Rename ${conversation.title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              startRename(conversation);
+                            }}
+                          >
+                            <PencilIcon className="size-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Unpin ${conversation.title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              togglePin(conversation.id);
+                            }}
+                          >
+                            <PinOffIcon className="size-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Delete ${conversation.title}`}
+                            className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setDeleteTarget(conversation);
+                            }}
+                          >
+                            <Trash2Icon className="size-3" />
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroup>
+        )}
+
+        {pinnedConversations.length > 0 && unpinnedGroups.length > 0 && <SidebarSeparator />}
+
+        {unpinnedGroups.map(([label, items]) => (
           <SidebarGroup key={label} className="py-1">
             <SidebarGroupLabel>{label}</SidebarGroupLabel>
             <SidebarMenu>
@@ -271,6 +370,17 @@ export function AppSidebar() {
                           <Button
                             variant="ghost"
                             size="icon-xs"
+                            aria-label={`Pin ${conversation.title}`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              togglePin(conversation.id);
+                            }}
+                          >
+                            <PinIcon className="size-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
                             aria-label={`Delete ${conversation.title}`}
                             className="text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                             onClick={(event) => {
@@ -300,13 +410,17 @@ export function AppSidebar() {
         {!isHistoryLoading &&
           isHistoryLoaded &&
           conversations.length === 0 &&
-          filteredGroups.length === 0 && (
+          pinnedConversations.length === 0 &&
+          unpinnedGroups.length === 0 && (
             <div className="px-4 py-6 text-center text-sm text-muted-foreground">
               No conversations yet.
             </div>
           )}
 
-        {!isHistoryLoading && filteredGroups.length === 0 && conversations.length > 0 && (
+        {!isHistoryLoading &&
+          pinnedConversations.length === 0 &&
+          unpinnedGroups.length === 0 &&
+          conversations.length > 0 && (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">
             No conversations found.
           </div>

@@ -4,6 +4,7 @@ import { getTursoConfig, tursoExecute, tursoExecuteMany, tursoSelect } from "./t
 interface TursoConversationRow {
   id: string;
   title: string;
+  pinned: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -88,6 +89,11 @@ export async function runMigrations(): Promise<void> {
     `);
     await tursoExecute("UPDATE schema_meta SET version = 2");
   }
+
+  if (version < 3) {
+    await tursoExecute("ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0");
+    await tursoExecute("UPDATE schema_meta SET version = 3");
+  }
 }
 
 export async function loadConversations(): Promise<Conversation[]> {
@@ -95,7 +101,7 @@ export async function loadConversations(): Promise<Conversation[]> {
   if (!config) return [];
 
   const convRows = await tursoSelect<TursoConversationRow>(
-    "SELECT id, title, created_at, updated_at FROM conversations ORDER BY updated_at DESC",
+    "SELECT id, title, pinned, created_at, updated_at FROM conversations ORDER BY updated_at DESC",
   );
 
   const conversations: Conversation[] = [];
@@ -130,6 +136,7 @@ export async function loadConversations(): Promise<Conversation[]> {
       id: row.id,
       title: row.title,
       messages,
+      pinned: row.pinned === 1,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     });
@@ -141,10 +148,11 @@ export async function loadConversations(): Promise<Conversation[]> {
 export async function saveConversation(conversation: Conversation): Promise<void> {
   const requests: Array<{ sql: string; args: unknown[] }> = [
     {
-      sql: `INSERT OR REPLACE INTO conversations (id, title, created_at, updated_at) VALUES (?, ?, ?, ?)`,
+      sql: `INSERT OR REPLACE INTO conversations (id, title, pinned, created_at, updated_at) VALUES (?, ?, ?, ?, ?)`,
       args: [
         conversation.id,
         conversation.title,
+        conversation.pinned ? 1 : 0,
         conversation.createdAt.toISOString(),
         conversation.updatedAt.toISOString(),
       ],

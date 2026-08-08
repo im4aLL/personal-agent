@@ -31,6 +31,7 @@ export type Conversation = {
   id: string;
   title: string;
   messages: Message[];
+  pinned: boolean;
   updatedAt: Date;
   createdAt: Date;
 };
