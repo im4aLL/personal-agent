@@ -31,7 +31,6 @@ import type { Conversation } from "#lib/types/chat";
 import { useChatStore } from "#store/chat";
 import { version } from "../../package.json";
 import { PersonalAgentLogo } from "./personal-agent-logo";
-import { ThemeToggle } from "./theme-toggle";
 import {
   Sidebar,
   SidebarContent,
@@ -492,9 +491,6 @@ export function AppSidebar() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
-          <div className="group-data-[collapsible=icon]:hidden">
-            <ThemeToggle />
-          </div>
         </div>
       </SidebarFooter>
 
