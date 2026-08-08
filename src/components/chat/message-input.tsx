@@ -26,6 +26,8 @@ import { Textarea } from "#components/ui/textarea";
 import { useChat } from "#hooks/use-chat";
 import { useChatStore } from "#store/chat";
 
+const MAX_MESSAGE_LENGTH = 50000;
+
 const THINKING_OPTIONS = [
   { value: "off", label: "Off" },
   { value: "low", label: "Low" },
@@ -188,7 +190,7 @@ function ThinkingSelector() {
 
 export function MessageInput() {
   const [value, setValue] = useState("");
-  const { sendMessage, stop, isGenerating, canSend } = useChat();
+  const { sendMessage, stop, isGenerating, canSend, isOffline } = useChat();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -198,6 +200,12 @@ export function MessageInput() {
   function handleSend() {
     const trimmed = value.trim();
     if (!trimmed || isGenerating || !canSend) return;
+    if (trimmed.length > MAX_MESSAGE_LENGTH) {
+      toast.error("Message too long", {
+        description: `Messages are limited to ${MAX_MESSAGE_LENGTH.toLocaleString()} characters.`,
+      });
+      return;
+    }
     setValue("");
     void sendMessage(trimmed);
   }
@@ -228,7 +236,13 @@ export function MessageInput() {
       <div className="relative flex flex-col rounded-2xl border bg-background p-3 dark:bg-transparent">
         <div className="flex items-end gap-2">
           <Textarea
-            placeholder={canSend ? "Message..." : "Select a provider and model to start chatting"}
+            placeholder={
+              isOffline
+                ? "You are offline"
+                : canSend
+                  ? "Message..."
+                  : "Select a provider and model to start chatting"
+            }
             value={value}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={handleKeyDown}
@@ -236,6 +250,7 @@ export function MessageInput() {
             ref={textareaRef}
             className="max-h-60 min-h-12 resize-none border-0 bg-transparent px-4 py-3 shadow-none focus-visible:ring-0 dark:bg-transparent"
             disabled={isGenerating}
+            maxLength={MAX_MESSAGE_LENGTH}
             aria-label="Message input"
           />
           <div className="p-1.5">

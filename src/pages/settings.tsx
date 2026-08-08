@@ -1,7 +1,8 @@
 "use client";
 
-import { PlusIcon, SparklesIcon } from "lucide-react";
+import { DownloadIcon, PlusIcon, SparklesIcon } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { AppearanceTab } from "#components/settings/appearance-tab";
 import { DataTab } from "#components/settings/data-tab";
 import { ProviderForm, type ProviderFormData } from "#components/settings/provider-form";
@@ -76,6 +77,30 @@ export default function SettingsPage() {
     setDefaultProvider(provider.id);
   }
 
+  function handleExportSettings() {
+    const exportData = providers.map((provider) => ({
+      label: provider.label,
+      baseUrl: provider.baseUrl,
+      models: provider.models.map((model) => model.id),
+      connectionMode: provider.connectionMode,
+    }));
+
+    const json = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "personal-agent-providers.json";
+    document.body.appendChild(anchor);
+    anchor.click();
+    document.body.removeChild(anchor);
+    URL.revokeObjectURL(url);
+
+    toast.success("Settings exported", {
+      description: "Provider labels, URLs, and models saved without API keys.",
+    });
+  }
+
   return (
     <div className="flex-1 overflow-auto p-6">
       <div className="mx-auto max-w-3xl space-y-6">
@@ -131,9 +156,22 @@ export default function SettingsPage() {
                   onSetDefault={handleSetDefault}
                 />
 
-                <div className="text-xs text-muted-foreground">
-                  Click the refresh icon next to a provider to fetch available models. Connection
-                  mode is remembered per provider.
+                <div className="flex items-center justify-between gap-4">
+                  <div className="text-xs text-muted-foreground">
+                    Click the refresh icon next to a provider to fetch available models. Connection
+                    mode is remembered per provider.
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportSettings}
+                    disabled={providers.length === 0}
+                    aria-label="Export provider settings"
+                  >
+                    <DownloadIcon className="size-3.5" />
+                    Export
+                  </Button>
                 </div>
               </CardContent>
             </Card>

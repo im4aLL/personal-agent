@@ -9,7 +9,7 @@ import {
   SettingsIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "#components/ui/button";
 import {
@@ -112,6 +112,7 @@ function DeleteConversationDialog({
 export function AppSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchInput, setSearchInput] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -126,6 +127,13 @@ export function AppSidebar() {
   const createConversation = useChatStore((state) => state.createConversation);
   const renameConversation = useChatStore((state) => state.renameConversation);
   const deleteConversation = useChatStore((state) => state.deleteConversation);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchQuery(searchInput);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const filteredGroups = useMemo(() => {
     const filtered = searchConversations(conversations, searchQuery.trim());
@@ -175,8 +183,8 @@ export function AppSidebar() {
             <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
             <SidebarInput
               placeholder="Search conversations..."
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               className="pl-8"
             />
           </div>

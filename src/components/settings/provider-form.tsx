@@ -165,6 +165,7 @@ export function ProviderForm({
               <Input
                 id="provider-label"
                 placeholder="e.g. OpenAI"
+                autoFocus
                 value={form.label}
                 onChange={(event) => updateField("label", event.target.value)}
                 onBlur={() => markTouched("label")}

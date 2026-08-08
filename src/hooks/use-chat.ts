@@ -2,7 +2,7 @@
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { streamText } from "ai";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { proxyFetch } from "#lib/ai";
 import { generateConversationTitle } from "#lib/title";
@@ -14,6 +14,34 @@ import {
   selectSelectedConversation,
   useChatStore,
 } from "#store/chat";
+
+const MAX_STREAM_RETRIES = 2;
+const STREAM_RETRY_BASE_DELAY_MS = 1000;
+
+function isRetryableStreamError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") return false;
+  if (error instanceof TypeError && error.message.includes("fetch")) return true;
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    if (msg.includes("network") || msg.includes("timeout") || msg.includes("econnrefused"))
+      return true;
+  }
+  return false;
+}
+
+function logProviderCall(details: {
+  providerName: string;
+  baseUrl: string;
+  modelId: string;
+  messageCount: number;
+}) {
+  if (import.meta.env.DEV) {
+    // eslint-disable-next-line no-console
+    console.log(
+      `[personal-agent] provider call: ${details.providerName} @ ${details.baseUrl} | model=${details.modelId} | messages=${details.messageCount}`,
+    );
+  }
+}
 
 type CoreMessage = {
   role: "user" | "assistant" | "system";
@@ -46,14 +74,42 @@ export function useChat() {
   const editMessageInStore = useChatStore((state) => state.editMessage);
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isOffline, setIsOffline] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    function handleOnline() {
+      setIsOffline(false);
+      toast.success("Back online");
+    }
+    function handleOffline() {
+      setIsOffline(true);
+      toast.error("You are offline", {
+        description: "Check your network connection.",
+        duration: Infinity,
+        id: "offline-toast",
+      });
+    }
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    if (!navigator.onLine) {
+      setIsOffline(true);
+    }
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   const activeProvider = useMemo(
     () => providers.find((provider) => provider.id === selectedModel.providerId),
     [providers, selectedModel.providerId],
   );
 
-  const canSend = Boolean(activeProvider);
+  const canSend = Boolean(activeProvider && !isOffline);
 
   const stop = useCallback(() => {
     abortControllerRef.current?.abort();
@@ -82,83 +138,126 @@ export function useChat() {
 
       addMessage(conversationId, assistantMessage);
 
-      abortControllerRef.current = new AbortController();
-      setIsGenerating(true);
+      logProviderCall({
+        providerName: activeProvider.label,
+        baseUrl: activeProvider.baseUrl,
+        modelId: selectedModel.modelId,
+        messageCount: contextMessages.length,
+      });
 
-      try {
-        const fetchImpl = activeProvider.connectionMode === "proxy" ? proxyFetch : undefined;
+      let lastError: unknown = null;
 
-        const provider = createOpenAICompatible({
-          name: activeProvider.name,
-          baseURL: activeProvider.baseUrl,
-          apiKey: activeProvider.apiKey,
-          fetch: fetchImpl,
-        });
+      for (let attempt = 0; attempt <= MAX_STREAM_RETRIES; attempt++) {
+        abortControllerRef.current = new AbortController();
 
-        const model = provider(selectedModel.modelId);
-        const messages = buildCoreMessages(contextMessages);
-
-        const { fullStream } = streamText({
-          model,
-          messages,
-          abortSignal: abortControllerRef.current.signal,
-        });
-
-        for await (const part of fullStream) {
-          if (part.type === "text-delta") {
-            appendMessageContent(conversationId, assistantMessage.id, part.text);
-          } else if (part.type === "reasoning-delta") {
-            appendMessageReasoning(conversationId, assistantMessage.id, part.text);
-          }
+        if (attempt === 0) {
+          setIsGenerating(true);
         }
 
-        setMessageStatus(conversationId, assistantMessage.id, "sent");
-        persistConversation(conversationId);
+        try {
+          const fetchImpl = activeProvider.connectionMode === "proxy" ? proxyFetch : undefined;
 
-        const currentConversation = useChatStore
-          .getState()
-          .conversations.find((item) => item.id === conversationId);
+          const provider = createOpenAICompatible({
+            name: activeProvider.name,
+            baseURL: activeProvider.baseUrl,
+            apiKey: activeProvider.apiKey,
+            fetch: fetchImpl,
+          });
 
-        if (
-          currentConversation &&
-          currentConversation.title === DEFAULT_CONVERSATION_TITLE &&
-          currentConversation.messages.length === 2 &&
-          currentConversation.messages[0]?.role === "user" &&
-          currentConversation.messages[1]?.id === assistantMessage.id
-        ) {
-          const firstUserMessage = currentConversation.messages[0].content;
-          const titleProvider = providers.find((provider) => provider.id === modelInfo.providerId);
+          const model = provider(selectedModel.modelId);
+          const messages = buildCoreMessages(contextMessages);
 
-          if (titleProvider) {
-            try {
-              const title = await generateConversationTitle(
-                firstUserMessage,
-                titleProvider,
-                modelInfo.modelId,
-              );
-              setConversationTitle(conversationId, title);
-              persistConversation(conversationId);
-            } catch {
-              setConversationTitle(conversationId, DEFAULT_CONVERSATION_TITLE);
-              persistConversation(conversationId);
+          const { fullStream } = streamText({
+            model,
+            messages,
+            abortSignal: abortControllerRef.current.signal,
+          });
+
+          for await (const part of fullStream) {
+            if (part.type === "text-delta") {
+              appendMessageContent(conversationId, assistantMessage.id, part.text);
+            } else if (part.type === "reasoning-delta") {
+              appendMessageReasoning(conversationId, assistantMessage.id, part.text);
             }
           }
-        }
-      } catch (error) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          setMessageStatus(conversationId, assistantMessage.id, "sent");
-          return;
-        }
 
-        const message = error instanceof Error ? error.message : "Failed to generate response";
+          setMessageStatus(conversationId, assistantMessage.id, "sent");
+          persistConversation(conversationId);
+
+          const currentConversation = useChatStore
+            .getState()
+            .conversations.find((item) => item.id === conversationId);
+
+          if (
+            currentConversation &&
+            currentConversation.title === DEFAULT_CONVERSATION_TITLE &&
+            currentConversation.messages.length === 2 &&
+            currentConversation.messages[0]?.role === "user" &&
+            currentConversation.messages[1]?.id === assistantMessage.id
+          ) {
+            const firstUserMessage = currentConversation.messages[0].content;
+            const titleProvider = providers.find((p) => p.id === modelInfo.providerId);
+
+            if (titleProvider) {
+              try {
+                const title = await generateConversationTitle(
+                  firstUserMessage,
+                  titleProvider,
+                  modelInfo.modelId,
+                );
+                setConversationTitle(conversationId, title);
+                persistConversation(conversationId);
+              } catch {
+                setConversationTitle(conversationId, DEFAULT_CONVERSATION_TITLE);
+                persistConversation(conversationId);
+              }
+            }
+          }
+
+          lastError = null;
+          break;
+        } catch (error) {
+          lastError = error;
+
+          if (error instanceof DOMException && error.name === "AbortError") {
+            setMessageStatus(conversationId, assistantMessage.id, "sent");
+            lastError = null;
+            break;
+          }
+
+          if (!isRetryableStreamError(error) || attempt >= MAX_STREAM_RETRIES) {
+            break;
+          }
+
+          const delay = STREAM_RETRY_BASE_DELAY_MS * 2 ** attempt;
+          if (import.meta.env.DEV) {
+            // eslint-disable-next-line no-console
+            console.log(
+              `[personal-agent] stream retry ${attempt + 1}/${MAX_STREAM_RETRIES} after ${delay}ms`,
+            );
+          }
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+      }
+
+      if (lastError) {
+        const message =
+          lastError instanceof Error ? lastError.message : "Failed to generate response";
+        const isNetworkError =
+          lastError instanceof TypeError && lastError.message.includes("fetch");
+
         setMessageError(conversationId, assistantMessage.id, message);
         toast.error("Failed to generate response", {
-          description: message,
+          description: isNetworkError
+            ? "Network error. Check your connection or try again."
+            : activeProvider.connectionMode === "proxy"
+              ? "Proxy request failed. The backend may be unreachable."
+              : message,
         });
-      } finally {
-        setIsGenerating(false);
-        abortControllerRef.current = null;
       }
+
+      setIsGenerating(false);
+      abortControllerRef.current = null;
     },
     [
       activeProvider,
@@ -301,6 +400,7 @@ export function useChat() {
   return {
     messages: conversation?.messages ?? [],
     isGenerating,
+    isOffline,
     canSend,
     sendMessage,
     stop,

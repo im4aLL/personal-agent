@@ -17,10 +17,8 @@ export function ChatArea() {
   return (
     <div className="flex min-h-0 flex-1 flex-col min-w-0">
       <ChatHeader title={selectedConversation.title} />
-      <div className="min-h-0 flex-1 overflow-y-auto">
-        <div className="w-full px-4 pb-8">
-          <MessageList conversation={selectedConversation} />
-        </div>
+      <div className="min-h-0 flex-1 w-full px-4 pb-8">
+        <MessageList conversation={selectedConversation} />
       </div>
       <MessageInput key={selectedConversation.id} />
     </div>
