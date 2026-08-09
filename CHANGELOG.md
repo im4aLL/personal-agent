@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.2.0
+
+### Features
+- Add Google and DuckDuckGo search window tools that open dedicated webview windows for manual searching, with result scraping and fetch chaining (`8a7c794`)
+  - Injects a floating "Done - send results" button into both search engines for collecting visible result links
+  - Handles Google redirect URLs and DuckDuckGo `uddg` redirect URLs transparently
+  - Falls back to returning visible page text when no result links can be parsed
+  - Includes settings toggles for both search providers in the Web Search settings tab
+- Update fetch-url tool description to guide agents to chain fetches after search window results
+
 ## 1.1.0
 
 ### Features
