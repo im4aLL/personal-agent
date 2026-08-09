@@ -1,6 +1,6 @@
 # Personal Agent
 
-Personal Agent is a local-first desktop AI workspace that brings your conversations, AI providers, custom agents, skills, and instructions into one place. Connect to multiple cloud or local models, create reusable AI capabilities, and activate agents, skills, or instructions instantly using slash commands—all while keeping your conversations and data under your control.
+Personal Agent is a local-first desktop AI workspace that brings your conversations, AI providers, custom agents, skills, and instructions into one place. Connect to multiple cloud or local models, create reusable AI capabilities, and activate agents, skills, or instructions instantly using slash commands-all while keeping your conversations and data under your control.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of the app's architecture, component tree, and data flows.
 
