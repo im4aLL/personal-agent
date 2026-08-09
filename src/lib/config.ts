@@ -6,6 +6,7 @@ export const TURSO_TOKEN_KEY = "personal-agent:turso-token";
 export const WEB_SEARCH_ENABLED_KEY = "personal-agent:web-search-enabled";
 export const FETCH_ENABLED_KEY = "personal-agent:fetch-enabled";
 export const TAVILY_API_KEY_KEY = "personal-agent:tavily-api-key";
+export const CHAT_FIXED_WIDTH_KEY = "personal-agent:chat-fixed-width";
 
 export type StoredModelSelection = {
   providerId: string;
@@ -187,12 +188,13 @@ export function clearTursoConfig(): void {
   }
 }
 
-function loadBooleanFlag(key: string): boolean {
-  if (typeof window === "undefined") return false;
+function loadBooleanFlag(key: string, defaultValue = false): boolean {
+  if (typeof window === "undefined") return defaultValue;
   try {
-    return window.localStorage.getItem(key) === "true";
+    const raw = window.localStorage.getItem(key);
+    return raw === null ? defaultValue : raw === "true";
   } catch {
-    return false;
+    return defaultValue;
   }
 }
 
@@ -246,4 +248,12 @@ export function clearTavilyApiKey(): void {
   } catch {
     // Ignore storage errors.
   }
+}
+
+export function loadChatFixedWidth(): boolean {
+  return loadBooleanFlag(CHAT_FIXED_WIDTH_KEY, true);
+}
+
+export function saveChatFixedWidth(enabled: boolean): void {
+  saveBooleanFlag(CHAT_FIXED_WIDTH_KEY, enabled);
 }

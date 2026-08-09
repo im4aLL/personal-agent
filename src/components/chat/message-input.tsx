@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { useChatWidth } from "#components/chat-width-provider";
 import { Button } from "#components/ui/button";
 import {
   Combobox,
@@ -39,6 +40,7 @@ import { Popover, PopoverContent, PopoverAnchor } from "#components/ui/popover";
 import { Textarea } from "#components/ui/textarea";
 import { useChat } from "#hooks/use-chat";
 import type { Attachment } from "#lib/types/chat";
+import { cn } from "#lib/utils";
 import { useAgentsStore } from "#store/agents";
 import { useChatStore } from "#store/chat";
 
@@ -296,6 +298,7 @@ function SlashCommandAutocomplete({
   items,
   highlightedIndex,
   onHighlightChange,
+  fixedWidth,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -304,6 +307,7 @@ function SlashCommandAutocomplete({
   items: SlashItem[];
   highlightedIndex: number;
   onHighlightChange: (index: number) => void;
+  fixedWidth: boolean;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -324,7 +328,10 @@ function SlashCommandAutocomplete({
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverAnchor asChild>
-        <div ref={anchorRef as React.RefObject<HTMLDivElement>} />
+        <div
+          ref={anchorRef as React.RefObject<HTMLDivElement>}
+          className={cn(fixedWidth && "max-w-[896px] mx-auto")}
+        />
       </PopoverAnchor>
       <PopoverContent
         className="w-80 p-1"
@@ -412,6 +419,7 @@ export function MessageInput() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [slashOpen, setSlashOpen] = useState(false);
   const { sendMessage, stop, isGenerating, canSend, isOffline } = useChat();
+  const { fixedWidth } = useChatWidth();
   const selectedModel = useChatStore((state) => state.selectedModel);
   const disabledModels = useChatStore((state) => state.disabledModels);
   const providers = useChatStore((state) => state.providers);
@@ -678,7 +686,12 @@ export function MessageInput() {
 
   return (
     <div className="border-t bg-background px-4 py-4">
-      <div ref={slashAnchorRef} className="relative flex flex-col rounded-2xl border bg-background p-3 dark:bg-transparent">
+      <div
+        className={cn(
+          "relative flex flex-col rounded-2xl border bg-background p-3 dark:bg-transparent",
+          fixedWidth && "max-w-[896px] mx-auto",
+        )}
+      >
         {hasActiveItems && (
           <div className="flex flex-wrap gap-1.5 px-4 pb-3">
             {activeInstructionName && (
@@ -838,6 +851,7 @@ export function MessageInput() {
         items={slashItems}
         highlightedIndex={highlightedIndex}
         onHighlightChange={setHighlightedIndex}
+        fixedWidth={fixedWidth}
       />
     </div>
   );

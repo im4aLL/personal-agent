@@ -137,7 +137,7 @@ function CodeComponent({
   const language = /language-(\w+)/.exec(className ?? "")?.[1];
 
   if (inline || !language || language === "text") {
-    return <code className="rounded bg-muted px-1 py-0.5 text-sm font-mono">{children}</code>;
+    return <code className="rounded bg-muted px-1 py-0.5 text-[0.875em] font-mono">{children}</code>;
   }
 
   return <CodeBlock className={className}>{children}</CodeBlock>;

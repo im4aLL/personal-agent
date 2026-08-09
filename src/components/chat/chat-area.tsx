@@ -1,6 +1,8 @@
 "use client";
 
 import { useMemo } from "react";
+import { useChatWidth } from "#components/chat-width-provider";
+import { cn } from "#lib/utils";
 import { selectSelectedConversation, useChatStore } from "#store/chat";
 import { ChatHeader } from "./chat-header";
 import { EmptyState } from "./empty-state";
@@ -13,6 +15,7 @@ export function ChatArea() {
   const providers = useChatStore((state) => state.providers);
   const setConversationTags = useChatStore((state) => state.setConversationTags);
   const togglePin = useChatStore((state) => state.togglePin);
+  const { fixedWidth } = useChatWidth();
 
   const existingTags = useMemo(() => {
     const all = new Set<string>();
@@ -38,7 +41,12 @@ export function ChatArea() {
         onTagsChange={(tags) => setConversationTags(selectedConversation.id, tags)}
         onTogglePin={() => togglePin(selectedConversation.id)}
       />
-      <div className="min-h-0 flex-1 flex flex-col w-full px-4 pb-8">
+      <div
+        className={cn(
+          "min-h-0 flex-1 flex flex-col w-full px-4 pb-8",
+          fixedWidth && "max-w-[896px] mx-auto",
+        )}
+      >
         <MessageList conversation={selectedConversation} />
       </div>
       <MessageInput key={selectedConversation.id} />
