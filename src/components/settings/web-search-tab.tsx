@@ -8,10 +8,14 @@ import { Label } from "#components/ui/label";
 import { Switch } from "#components/ui/switch";
 import {
   clearTavilyApiKey,
+  loadDuckDuckGoSearchEnabled,
   loadFetchEnabled,
+  loadGoogleSearchEnabled,
   loadTavilyApiKey,
   loadWebSearchEnabled,
+  saveDuckDuckGoSearchEnabled,
   saveFetchEnabled,
+  saveGoogleSearchEnabled,
   saveTavilyApiKey,
   saveWebSearchEnabled,
 } from "#lib/config";
@@ -21,12 +25,16 @@ const TAVILY_API_KEY_URL = "https://app.tavily.com/home";
 export function WebSearchTab() {
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [fetchEnabled, setFetchEnabled] = useState(false);
+  const [googleSearchEnabled, setGoogleSearchEnabled] = useState(false);
+  const [duckDuckGoSearchEnabled, setDuckDuckGoSearchEnabled] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [touched, setTouched] = useState(false);
 
   useEffect(() => {
     setWebSearchEnabled(loadWebSearchEnabled());
     setFetchEnabled(loadFetchEnabled());
+    setGoogleSearchEnabled(loadGoogleSearchEnabled());
+    setDuckDuckGoSearchEnabled(loadDuckDuckGoSearchEnabled());
     setApiKey(loadTavilyApiKey() ?? "");
   }, []);
 
@@ -49,6 +57,20 @@ export function WebSearchTab() {
     setFetchEnabled(enabled);
     saveFetchEnabled(enabled);
     toast.success(enabled ? "URL fetching enabled" : "URL fetching disabled");
+  }
+
+  function handleToggleGoogleSearch(enabled: boolean) {
+    setGoogleSearchEnabled(enabled);
+    saveGoogleSearchEnabled(enabled);
+    toast.success(enabled ? "Google search window enabled" : "Google search window disabled");
+  }
+
+  function handleToggleDuckDuckGoSearch(enabled: boolean) {
+    setDuckDuckGoSearchEnabled(enabled);
+    saveDuckDuckGoSearchEnabled(enabled);
+    toast.success(
+      enabled ? "DuckDuckGo search window enabled" : "DuckDuckGo search window disabled",
+    );
   }
 
   function handleSaveKey(event: React.FormEvent) {
@@ -132,6 +154,28 @@ export function WebSearchTab() {
           </p>
         </div>
         <Switch checked={fetchEnabled} onCheckedChange={handleToggleFetch} />
+      </div>
+
+      <div className="flex items-center justify-between gap-4 border-t pt-6">
+        <div>
+          <h3 className="text-base font-medium">Google search window</h3>
+          <p className="text-sm text-muted-foreground">
+            Let the agent open a Google search in a dedicated window. You perform the search
+            yourself (handling logins or captchas) and click "Done - send results".
+          </p>
+        </div>
+        <Switch checked={googleSearchEnabled} onCheckedChange={handleToggleGoogleSearch} />
+      </div>
+
+      <div className="flex items-center justify-between gap-4 border-t pt-6">
+        <div>
+          <h3 className="text-base font-medium">DuckDuckGo search window</h3>
+          <p className="text-sm text-muted-foreground">
+            Let the agent open a DuckDuckGo search in a dedicated window. You perform the search
+            yourself and click "Done - send results".
+          </p>
+        </div>
+        <Switch checked={duckDuckGoSearchEnabled} onCheckedChange={handleToggleDuckDuckGoSearch} />
       </div>
     </div>
   );

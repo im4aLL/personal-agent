@@ -10,7 +10,9 @@ export function createFetchUrlTool() {
   return tool({
     description:
       "Fetch a web page by URL and return its readable text content. Use this when the " +
-      "user references a URL or you need the actual content of a specific page.",
+      "user references a URL or you need the actual content of a specific page. " +
+      "Also use this after a search tool (webSearch, googleSearch, duckduckgoSearch) " +
+      "returns result URLs, to read the full content of a promising result.",
     inputSchema: z.object({
       url: z.string().url().describe("The absolute URL to fetch, including https://"),
     }),

@@ -6,9 +6,17 @@ import { APICallError, stepCountIs, streamText, type Tool } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { proxyFetch } from "#lib/ai";
-import { loadFetchEnabled, loadTavilyApiKey, loadWebSearchEnabled } from "#lib/config";
+import {
+  loadDuckDuckGoSearchEnabled,
+  loadFetchEnabled,
+  loadGoogleSearchEnabled,
+  loadTavilyApiKey,
+  loadWebSearchEnabled,
+} from "#lib/config";
 import { generateConversationTitle } from "#lib/title";
+import { createDuckDuckGoSearchTool } from "#lib/tools/duckduckgo-search";
 import { createFetchUrlTool } from "#lib/tools/fetch-url";
+import { createGoogleSearchTool } from "#lib/tools/google-search";
 import { createWebSearchTool } from "#lib/tools/web-search";
 import type { Attachment, Message, MessageModelInfo } from "#lib/types/chat";
 import { useAgentsStore } from "#store/agents";
@@ -52,6 +60,14 @@ function buildEnabledTools(): Record<string, Tool> {
     if (apiKey) {
       tools.webSearch = createWebSearchTool(apiKey);
     }
+  }
+
+  if (loadGoogleSearchEnabled()) {
+    tools.googleSearch = createGoogleSearchTool();
+  }
+
+  if (loadDuckDuckGoSearchEnabled()) {
+    tools.duckduckgoSearch = createDuckDuckGoSearchTool();
   }
 
   return tools;

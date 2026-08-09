@@ -5,6 +5,8 @@ export const TURSO_URL_KEY = "personal-agent:turso-url";
 export const TURSO_TOKEN_KEY = "personal-agent:turso-token";
 export const WEB_SEARCH_ENABLED_KEY = "personal-agent:web-search-enabled";
 export const FETCH_ENABLED_KEY = "personal-agent:fetch-enabled";
+export const GOOGLE_SEARCH_ENABLED_KEY = "personal-agent:google-search-enabled";
+export const DUCKDUCKGO_SEARCH_ENABLED_KEY = "personal-agent:duckduckgo-search-enabled";
 export const TAVILY_API_KEY_KEY = "personal-agent:tavily-api-key";
 export const CHAT_FIXED_WIDTH_KEY = "personal-agent:chat-fixed-width";
 
@@ -221,6 +223,22 @@ export function loadFetchEnabled(): boolean {
 
 export function saveFetchEnabled(enabled: boolean): void {
   saveBooleanFlag(FETCH_ENABLED_KEY, enabled);
+}
+
+export function loadGoogleSearchEnabled(): boolean {
+  return loadBooleanFlag(GOOGLE_SEARCH_ENABLED_KEY);
+}
+
+export function saveGoogleSearchEnabled(enabled: boolean): void {
+  saveBooleanFlag(GOOGLE_SEARCH_ENABLED_KEY, enabled);
+}
+
+export function loadDuckDuckGoSearchEnabled(): boolean {
+  return loadBooleanFlag(DUCKDUCKGO_SEARCH_ENABLED_KEY);
+}
+
+export function saveDuckDuckGoSearchEnabled(enabled: boolean): void {
+  saveBooleanFlag(DUCKDUCKGO_SEARCH_ENABLED_KEY, enabled);
 }
 
 export function loadTavilyApiKey(): string | null {

@@ -1,4 +1,7 @@
+mod duckduckgo_search;
+mod google_search;
 mod proxy;
+mod search_window;
 
 #[tauri::command]
 fn write_file(dest: String, contents: Vec<u8>) -> Result<(), String> {
@@ -16,6 +19,10 @@ pub fn run() {
             proxy::proxy_stream,
             proxy::abort_stream,
             proxy::proxy_bytes,
+            google_search::google_search,
+            google_search::collect_google_results,
+            duckduckgo_search::duckduckgo_search,
+            duckduckgo_search::collect_duckduckgo_results,
             write_file
         ])
         .run(tauri::generate_context!())
