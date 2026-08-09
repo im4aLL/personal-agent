@@ -1,6 +1,8 @@
 # Personal Agent
 
-A local-first AI chat desktop application built with Tauri, React, and TypeScript. Talk to any OpenAI-compatible API from your desktop with full control over your data, instructions, and workflow.
+Personal Agent is a local-first desktop AI workspace that brings your conversations, AI providers, custom agents, skills, and instructions into one place. Connect to multiple cloud or local models, create reusable AI capabilities, and activate agents, skills, or instructions instantly using slash commands—all while keeping your conversations and data under your control.
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of the app's architecture, component tree, and data flows.
 
 ## Why Personal Agent?
 
@@ -33,7 +35,7 @@ Personal Agent solves all of this:
 
 ## Installation
 
-Download the latest release for your platform from the [GitHub Releases](https://github.com/hadi/personal-agent/releases) page.
+Download the latest release for your platform from the [GitHub Releases](https://github.com/im4aLL/personal-agent/releases) page.
 
 - **macOS** - `.dmg` installer
 - **Windows** - `.msi` installer
@@ -42,7 +44,7 @@ Download the latest release for your platform from the [GitHub Releases](https:/
 
 ```bash
 # Prerequisites: Node.js 20+, Rust, and Tauri v2 system dependencies
-git clone https://github.com/hadi/personal-agent.git
+git clone https://github.com/im4aLL/personal-agent.git
 cd personal-agent
 npm install
 npm run tauri build
@@ -58,6 +60,7 @@ npm run tauri dev
 ## Features
 
 ### Chat
+
 - Chat with any OpenAI-compatible provider (OpenAI, Ollama, LM Studio, DeepSeek, Opencode Go, and more)
 - Streaming responses with stop support
 - Thinking / reasoning content display (collapsible)
@@ -70,11 +73,13 @@ npm run tauri dev
 - Keyboard shortcuts: Enter to send, Shift+Enter for newline, Esc to stop
 
 ### Customization
+
 - **Custom instructions** - Global rules that apply to every message you send. Define your preferred format, tone, and constraints once.
 - **Skills** - Reusable knowledge blocks you can activate per conversation (coding conventions, project guidelines, domain-specific rules).
 - **Custom agents** - Combine instructions and skills into named profiles. Switch agents when switching contexts.
 
 ### Data
+
 - Local-first storage with Turso (libsql) for optional cloud sync
 - Conversations, agents, skills, and instructions sync across devices
 - Offline detection with automatic reconnection
@@ -83,6 +88,7 @@ npm run tauri dev
 - Dev-mode provider call logging (URL and model only, no keys)
 
 ### Other
+
 - Dark, light, and system theme support
 - Stream-drop retry with exponential backoff
 - Provider management with connection testing and model discovery
@@ -161,6 +167,7 @@ These features form the core of Personal Agent's customization system. They are 
 Custom instructions are global rules injected as system prompts into every conversation. Use them to enforce formatting preferences, tone, or constraints.
 
 Examples:
+
 - "Never use emojis in responses."
 - "Always format code blocks with the language tag."
 - "Respond in plain English without marketing fluff."
@@ -170,6 +177,7 @@ Examples:
 Skills are reusable blocks of domain knowledge or guidelines you can activate per conversation. They are injected into the system prompt only when you activate them.
 
 Examples:
+
 - A skill with your project's coding conventions
 - A skill with your preferred meeting note format
 - A skill with rules for writing commit messages
@@ -179,6 +187,7 @@ Examples:
 Custom agents combine a system prompt with a description. Activate an agent to switch the AI's persona and behavior for a specific workflow.
 
 Examples:
+
 - A "Code Reviewer" agent that focuses on security and performance
 - A "Technical Writer" agent that produces documentation in your preferred style
 - A "DevOps" agent that knows your infrastructure setup
@@ -202,38 +211,38 @@ To back up your provider configuration without exposing API keys:
 
 ## Technology Stack
 
-| Layer | Technology |
-|-------|------------|
-| Desktop shell | [Tauri v2](https://v2.tauri.app/) (Rust) |
-| Frontend | [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/) |
-| Build tool | [Vite](https://vitejs.dev/) |
-| State management | [Zustand](https://zustand.docs.pmnd.rs/) |
-| AI SDK | [Vercel AI SDK](https://sdk.vercel.ai/) with OpenAI-compatible provider |
-| Styling | [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/) |
-| Markdown | [react-markdown](https://github.com/remarkjs/react-markdown) with GFM + [highlight.js](https://highlightjs.org/) |
-| UI primitives | [Radix UI](https://www.radix-ui.com/) + [Base UI](https://base-ui.com/) |
-| Icons | [Lucide React](https://lucide.dev/) |
-| Database | [Turso](https://turso.tech/) (libsql) for optional cloud sync; localStorage for provider config |
-| Linting & formatting | [Biome](https://biomejs.dev/) |
-| Routing | [React Router v7](https://reactrouter.com/) |
+| Layer                | Technology                                                                                                       |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| Desktop shell        | [Tauri v2](https://v2.tauri.app/) (Rust)                                                                         |
+| Frontend             | [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)                                   |
+| Build tool           | [Vite](https://vitejs.dev/)                                                                                      |
+| State management     | [Zustand](https://zustand.docs.pmnd.rs/)                                                                         |
+| AI SDK               | [Vercel AI SDK](https://sdk.vercel.ai/) with OpenAI-compatible provider                                          |
+| Styling              | [Tailwind CSS v4](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)                                |
+| Markdown             | [react-markdown](https://github.com/remarkjs/react-markdown) with GFM + [highlight.js](https://highlightjs.org/) |
+| UI primitives        | [Radix UI](https://www.radix-ui.com/) + [Base UI](https://base-ui.com/)                                          |
+| Icons                | [Lucide React](https://lucide.dev/)                                                                              |
+| Database             | [Turso](https://turso.tech/) (libsql) for optional cloud sync; localStorage for provider config                  |
+| Linting & formatting | [Biome](https://biomejs.dev/)                                                                                    |
+| Routing              | [React Router v7](https://reactrouter.com/)                                                                      |
 
 ## Architecture
 
 ### Key files
 
-| Path | Purpose |
-|------|---------|
-| `src/hooks/use-chat.ts` | Core chat logic: send, stream, retry, edit, regenerate |
-| `src/store/chat.ts` | Zustand store: conversations, providers, model selection |
-| `src/store/agents.ts` | Zustand store: instructions, skills, custom agents |
-| `src/lib/ai.ts` | AI SDK integration and Tauri proxy fetch |
-| `src/lib/providers.ts` | Provider model discovery and connection testing |
-| `src/lib/agent-repository.ts` | Agent/skill/instruction persistence layer |
-| `src/components/chat/message-list.tsx` | Virtualized message rendering |
-| `src/components/chat/message-input.tsx` | Input with Enter/Shift+Enter/Esc handling |
-| `src/components/settings/provider-form.tsx` | Provider add/edit form with validation |
-| `src/components/settings/agents-tab.tsx` | Custom instructions, skills, and agents management |
-| `src-tauri/src/proxy.rs` | Tauri proxy and streaming backend |
+| Path                                        | Purpose                                                  |
+| ------------------------------------------- | -------------------------------------------------------- |
+| `src/hooks/use-chat.ts`                     | Core chat logic: send, stream, retry, edit, regenerate   |
+| `src/store/chat.ts`                         | Zustand store: conversations, providers, model selection |
+| `src/store/agents.ts`                       | Zustand store: instructions, skills, custom agents       |
+| `src/lib/ai.ts`                             | AI SDK integration and Tauri proxy fetch                 |
+| `src/lib/providers.ts`                      | Provider model discovery and connection testing          |
+| `src/lib/agent-repository.ts`               | Agent/skill/instruction persistence layer                |
+| `src/components/chat/message-list.tsx`      | Virtualized message rendering                            |
+| `src/components/chat/message-input.tsx`     | Input with Enter/Shift+Enter/Esc handling                |
+| `src/components/settings/provider-form.tsx` | Provider add/edit form with validation                   |
+| `src/components/settings/agents-tab.tsx`    | Custom instructions, skills, and agents management       |
+| `src-tauri/src/proxy.rs`                    | Tauri proxy and streaming backend                        |
 
 ## License
 
