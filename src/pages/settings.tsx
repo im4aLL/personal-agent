@@ -10,16 +10,16 @@ import {
   ServerIcon,
   SparklesIcon,
   Wand2Icon,
+  WrenchIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
-import { InstructionsTab, SkillsTab, CustomAgentsTab } from "#components/settings/agents-tab";
+import { CustomAgentsTab, InstructionsTab, SkillsTab } from "#components/settings/agents-tab";
 import { AppearanceTab } from "#components/settings/appearance-tab";
 import { DataTab } from "#components/settings/data-tab";
-import { getTursoConfig } from "#lib/turso";
-import { useAgentsStore } from "#store/agents";
 import { ProviderForm, type ProviderFormData } from "#components/settings/provider-form";
 import { ProvidersList } from "#components/settings/providers-list";
+import { WebSearchTab } from "#components/settings/web-search-tab";
 import { Button } from "#components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "#components/ui/card";
 import {
@@ -30,15 +30,29 @@ import {
   DialogHeader,
   DialogTitle,
 } from "#components/ui/dialog";
-import { cn } from "#lib/utils";
 import type { ConnectionMode } from "#lib/providers";
+import { getTursoConfig } from "#lib/turso";
+import { cn } from "#lib/utils";
+import { useAgentsStore } from "#store/agents";
 import { PROVIDER_PRESETS, type ProviderInfo, useChatStore } from "#store/chat";
 
-type SettingsSection = "providers" | "appearance" | "data" | "instructions" | "skills" | "agents";
+type SettingsSection =
+  | "providers"
+  | "appearance"
+  | "data"
+  | "tool"
+  | "instructions"
+  | "skills"
+  | "agents";
 
-const SECTIONS: { id: SettingsSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+const SECTIONS: {
+  id: SettingsSection;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+}[] = [
   { id: "data", label: "Data", icon: DatabaseIcon },
   { id: "providers", label: "Providers", icon: ServerIcon },
+  { id: "tool", label: "Tool", icon: WrenchIcon },
   { id: "appearance", label: "Appearance", icon: PaletteIcon },
   { id: "instructions", label: "Instructions", icon: ScrollTextIcon },
   { id: "skills", label: "Skills", icon: Wand2Icon },
@@ -55,8 +69,8 @@ function AgentsSectionsGuard({ children }: { children: React.ReactNode }) {
         <BotIcon className="mb-4 size-12 text-muted-foreground" />
         <h3 className="text-lg font-medium">Configure Turso to use agents</h3>
         <p className="mt-2 text-sm text-muted-foreground">
-          User instructions, skills, and custom agents require a Turso database connection.
-          Set it up in the Data tab.
+          User instructions, skills, and custom agents require a Turso database connection. Set it
+          up in the Data tab.
         </p>
       </div>
     );
@@ -326,9 +340,7 @@ export default function SettingsPage() {
               <Card>
                 <CardHeader>
                   <CardTitle>Agents</CardTitle>
-                  <CardDescription>
-                    Custom agents with their own system prompts.
-                  </CardDescription>
+                  <CardDescription>Custom agents with their own system prompts.</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <AgentsSectionsGuard>
@@ -358,6 +370,20 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent>
                   <DataTab />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeSection === "tool" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tool</CardTitle>
+                  <CardDescription>
+                    Enable and configure tools the agent can use during chat.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <WebSearchTab />
                 </CardContent>
               </Card>
             )}

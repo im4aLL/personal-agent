@@ -2,11 +2,14 @@
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { ImagePart, TextPart, UserContent } from "@ai-sdk/provider-utils";
-import { streamText } from "ai";
+import { stepCountIs, streamText, type Tool } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { proxyFetch } from "#lib/ai";
+import { loadFetchEnabled, loadTavilyApiKey, loadWebSearchEnabled } from "#lib/config";
 import { generateConversationTitle } from "#lib/title";
+import { createFetchUrlTool } from "#lib/tools/fetch-url";
+import { createWebSearchTool } from "#lib/tools/web-search";
 import type { Attachment, Message, MessageModelInfo } from "#lib/types/chat";
 import { useAgentsStore } from "#store/agents";
 import {
@@ -26,6 +29,23 @@ const THINKING_TO_REASONING: Record<string, "none" | "low" | "medium" | "high"> 
   medium: "medium",
   high: "high",
 };
+
+function buildEnabledTools(): Record<string, Tool> {
+  const tools: Record<string, Tool> = {};
+
+  if (loadFetchEnabled()) {
+    tools.fetchUrl = createFetchUrlTool();
+  }
+
+  if (loadWebSearchEnabled()) {
+    const apiKey = loadTavilyApiKey();
+    if (apiKey) {
+      tools.webSearch = createWebSearchTool(apiKey);
+    }
+  }
+
+  return tools;
+}
 
 function isRetryableStreamError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === "AbortError") return false;
@@ -161,7 +181,14 @@ export function useChat() {
         skills: agentSkills,
         customAgents: agentCustomAgents,
       }),
-    [activeInstructionId, activeSkillId, activeAgentId, userInstructions, agentSkills, agentCustomAgents],
+    [
+      activeInstructionId,
+      activeSkillId,
+      activeAgentId,
+      userInstructions,
+      agentSkills,
+      agentCustomAgents,
+    ],
   );
 
   const [isGenerating, setIsGenerating] = useState(false);
@@ -261,11 +288,14 @@ export function useChat() {
 
           const model = provider(selectedModel.modelId);
           const messages = buildCoreMessages(contextMessages);
+          const tools = buildEnabledTools();
+          const hasTools = Object.keys(tools).length > 0;
 
           const { fullStream } = streamText({
             model,
             messages,
             ...(systemPrompt ? { system: systemPrompt } : {}),
+            ...(hasTools ? { tools, stopWhen: stepCountIs(5) } : {}),
             abortSignal: abortControllerRef.current.signal,
             reasoning:
               thinkingLevel !== "off" ? (THINKING_TO_REASONING[thinkingLevel] ?? "medium") : "none",
@@ -481,7 +511,11 @@ export function useChat() {
       return;
     }
 
-    await streamAssistantResponse(currentConversation.id, currentConversation.messages, systemPrompt);
+    await streamAssistantResponse(
+      currentConversation.id,
+      currentConversation.messages,
+      systemPrompt,
+    );
   }, [conversation, activeProvider, regenerateMessage, streamAssistantResponse, systemPrompt]);
 
   const editMessage = useCallback(
@@ -505,7 +539,11 @@ export function useChat() {
         return;
       }
 
-      await streamAssistantResponse(currentConversation.id, currentConversation.messages, systemPrompt);
+      await streamAssistantResponse(
+        currentConversation.id,
+        currentConversation.messages,
+        systemPrompt,
+      );
     },
     [conversation, activeProvider, editMessageInStore, streamAssistantResponse, systemPrompt],
   );

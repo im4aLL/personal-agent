@@ -3,6 +3,9 @@ const OLD_MODEL_STORAGE_KEY = "personal-agent:selected-model";
 const DISABLED_MODELS_STORAGE_KEY = "personal-agent:disabled-models";
 export const TURSO_URL_KEY = "personal-agent:turso-url";
 export const TURSO_TOKEN_KEY = "personal-agent:turso-token";
+export const WEB_SEARCH_ENABLED_KEY = "personal-agent:web-search-enabled";
+export const FETCH_ENABLED_KEY = "personal-agent:fetch-enabled";
+export const TAVILY_API_KEY_KEY = "personal-agent:tavily-api-key";
 
 export type StoredModelSelection = {
   providerId: string;
@@ -179,6 +182,67 @@ export function clearTursoConfig(): void {
   try {
     window.localStorage.removeItem(TURSO_URL_KEY);
     window.localStorage.removeItem(TURSO_TOKEN_KEY);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+function loadBooleanFlag(key: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(key) === "true";
+  } catch {
+    return false;
+  }
+}
+
+function saveBooleanFlag(key: string, value: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, value ? "true" : "false");
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+export function loadWebSearchEnabled(): boolean {
+  return loadBooleanFlag(WEB_SEARCH_ENABLED_KEY);
+}
+
+export function saveWebSearchEnabled(enabled: boolean): void {
+  saveBooleanFlag(WEB_SEARCH_ENABLED_KEY, enabled);
+}
+
+export function loadFetchEnabled(): boolean {
+  return loadBooleanFlag(FETCH_ENABLED_KEY);
+}
+
+export function saveFetchEnabled(enabled: boolean): void {
+  saveBooleanFlag(FETCH_ENABLED_KEY, enabled);
+}
+
+export function loadTavilyApiKey(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(TAVILY_API_KEY_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function saveTavilyApiKey(apiKey: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(TAVILY_API_KEY_KEY, apiKey);
+  } catch {
+    // Ignore storage errors.
+  }
+}
+
+export function clearTavilyApiKey(): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(TAVILY_API_KEY_KEY);
   } catch {
     // Ignore storage errors.
   }

@@ -13,6 +13,13 @@ import {
 } from "#components/ui/dialog";
 import { Input } from "#components/ui/input";
 import { Label } from "#components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "#components/ui/select";
 import type { ConnectionMode, ProviderInput, TestConnectionResult } from "#lib/providers";
 import { testProviderConnection } from "#lib/providers";
 import type { ProviderInfo } from "#store/chat";
@@ -236,15 +243,18 @@ export function ProviderForm({
 
             <div className="grid gap-2">
               <Label htmlFor="provider-connection-mode">Connection mode</Label>
-              <select
-                id="provider-connection-mode"
+              <Select
                 value={form.connectionMode}
-                onChange={(event) => updateField("connectionMode", event.target.value)}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                onValueChange={(value) => updateField("connectionMode", value)}
               >
-                <option value="direct">Direct (fetch from browser)</option>
-                <option value="proxy">Proxy (via Rust backend)</option>
-              </select>
+                <SelectTrigger id="provider-connection-mode" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="direct">Direct (fetch from browser)</SelectItem>
+                  <SelectItem value="proxy">Proxy (via Rust backend)</SelectItem>
+                </SelectContent>
+              </Select>
               <p className="text-xs text-muted-foreground">
                 Auto-detected on model fetch if left as Direct.
               </p>
