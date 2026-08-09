@@ -15,13 +15,30 @@ export function MessageList({ conversation }: MessageListProps) {
   const { retry, regenerate, editMessage, isGenerating } = useChat();
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  const isPinnedToBottomRef = useRef(true);
+  const lastMessageIdRef = useRef<string | null>(null);
   const isMessagesLoading = useChatStore((state) => state.messagesLoading.has(conversation.id));
 
   const messages = conversation.messages;
 
+  const handleScroll = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    isPinnedToBottomRef.current = distanceFromBottom < 48;
+  };
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: conversation reference changes when messages update
   useEffect(() => {
-    if (!endRef.current) return;
+    const lastMessage = messages[messages.length - 1];
+    // A newly sent user message always snaps the view back to the bottom.
+    if (lastMessage && lastMessage.role === "user" && lastMessage.id !== lastMessageIdRef.current) {
+      isPinnedToBottomRef.current = true;
+    }
+    lastMessageIdRef.current = lastMessage?.id ?? null;
+
+    if (!endRef.current || !isPinnedToBottomRef.current) return;
     endRef.current.scrollIntoView({ behavior: "auto", block: "end" });
   }, [conversation]);
 
@@ -48,7 +65,11 @@ export function MessageList({ conversation }: MessageListProps) {
   }
 
   return (
-    <div ref={containerRef} className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+    <div
+      ref={containerRef}
+      onScroll={handleScroll}
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+    >
       {messages.map((message) => (
         <MessageBubble
           key={message.id}

@@ -26,24 +26,31 @@ export function createFetchUrlTool() {
         return { error: `Fetching ${url} returned HTTP ${response.status}.` };
       }
 
+      let extracted: { title: string | null; content: string } | null = null;
       try {
         const { document } = parseHTML(response.body);
         const article = new Readability(document).parse();
-
-        if (!article?.textContent?.trim()) {
-          return { error: `Could not extract readable content from ${url}.` };
+        const text = article?.textContent?.trim();
+        if (text) {
+          extracted = {
+            title: article?.title ?? null,
+            content: truncate(text, MAX_CONTENT_LENGTH),
+          };
         }
-
-        const content = truncate(article.textContent.trim(), MAX_CONTENT_LENGTH);
-
-        return {
-          url,
-          title: article.title ?? null,
-          content,
-        };
-      } catch (error) {
-        return { error: `Failed to parse content from ${url}: ${toErrorMessage(error)}` };
+      } catch {
+        // Not (extractable) HTML - fall through to the raw-text fallback below.
       }
+
+      if (extracted) {
+        return { url, ...extracted };
+      }
+
+      const raw = response.body.trim();
+      if (!raw) {
+        return { error: `Could not extract readable content from ${url}.` };
+      }
+
+      return { url, title: null, content: truncate(raw, MAX_CONTENT_LENGTH) };
     },
   });
 }

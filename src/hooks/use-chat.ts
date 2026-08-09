@@ -2,7 +2,7 @@
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { ImagePart, TextPart, UserContent } from "@ai-sdk/provider-utils";
-import { stepCountIs, streamText, type Tool } from "ai";
+import { APICallError, stepCountIs, streamText, type Tool } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { proxyFetch } from "#lib/ai";
@@ -30,6 +30,16 @@ const THINKING_TO_REASONING: Record<string, "none" | "low" | "medium" | "high"> 
   high: "high",
 };
 
+const GEMINI_BASE_URL_MARKER = "generativelanguage.googleapis.com";
+
+// The AI SDK's generic OpenAI-compatible layer drops Gemini's required
+// `thought_signature` on function-call turns, so multi-turn tool calls always
+// fail with a 400 on Gemini models. Disable tools for them until that's fixed
+// upstream: https://github.com/vercel/ai/issues/11590
+function isGeminiProvider(baseUrl: string): boolean {
+  return baseUrl.includes(GEMINI_BASE_URL_MARKER);
+}
+
 function buildEnabledTools(): Record<string, Tool> {
   const tools: Record<string, Tool> = {};
 
@@ -45,6 +55,11 @@ function buildEnabledTools(): Record<string, Tool> {
   }
 
   return tools;
+}
+
+function truncate(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}...`;
 }
 
 function isRetryableStreamError(error: unknown): boolean {
@@ -288,14 +303,14 @@ export function useChat() {
 
           const model = provider(selectedModel.modelId);
           const messages = buildCoreMessages(contextMessages);
-          const tools = buildEnabledTools();
+          const tools = isGeminiProvider(activeProvider.baseUrl) ? {} : buildEnabledTools();
           const hasTools = Object.keys(tools).length > 0;
 
           const { fullStream } = streamText({
             model,
             messages,
             ...(systemPrompt ? { system: systemPrompt } : {}),
-            ...(hasTools ? { tools, stopWhen: stepCountIs(5) } : {}),
+            ...(hasTools ? { tools, stopWhen: stepCountIs(8) } : {}),
             abortSignal: abortControllerRef.current.signal,
             reasoning:
               thinkingLevel !== "off" ? (THINKING_TO_REASONING[thinkingLevel] ?? "medium") : "none",
@@ -306,6 +321,22 @@ export function useChat() {
               appendMessageContent(conversationId, assistantMessage.id, part.text);
             } else if (part.type === "reasoning-delta") {
               appendMessageReasoning(conversationId, assistantMessage.id, part.text);
+            } else if (part.type === "error") {
+              throw part.error instanceof Error ? part.error : new Error(String(part.error));
+            } else if (import.meta.env.DEV) {
+              if (part.type === "tool-call") {
+                // eslint-disable-next-line no-console
+                console.log(`[personal-agent] tool call: ${part.toolName}`, part.input);
+              } else if (part.type === "tool-result") {
+                // eslint-disable-next-line no-console
+                console.log(`[personal-agent] tool result: ${part.toolName}`, part.output);
+              } else if (part.type === "tool-error") {
+                // eslint-disable-next-line no-console
+                console.log(`[personal-agent] tool error: ${part.toolName}`, part.error);
+              } else if (part.type === "finish") {
+                // eslint-disable-next-line no-console
+                console.log(`[personal-agent] stream finished: ${part.finishReason}`);
+              }
             }
           }
 
@@ -369,10 +400,22 @@ export function useChat() {
       }
 
       if (lastError) {
-        const message =
+        let message =
           lastError instanceof Error ? lastError.message : "Failed to generate response";
         const isNetworkError =
           lastError instanceof TypeError && lastError.message.includes("fetch");
+
+        if (APICallError.isInstance(lastError)) {
+          // eslint-disable-next-line no-console
+          console.error("[personal-agent] API call failed", {
+            statusCode: lastError.statusCode,
+            url: lastError.url,
+            responseBody: lastError.responseBody,
+          });
+          if (lastError.responseBody) {
+            message = `${message}: ${truncate(lastError.responseBody, 500)}`;
+          }
+        }
 
         setMessageError(conversationId, assistantMessage.id, message);
         toast.error("Failed to generate response", {

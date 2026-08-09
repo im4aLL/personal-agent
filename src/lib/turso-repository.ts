@@ -367,29 +367,42 @@ export async function saveMessage(conversationId: string, message: Message): Pro
   const modelId = message.model?.modelId ?? null;
   const modelName = message.model?.modelName ?? null;
   const thinkingLevel = message.thinkingLevel ?? null;
+  const nowIso = message.createdAt.toISOString();
 
-  await tursoExecute(
-    `INSERT OR REPLACE INTO messages (
-      id, conversation_id, role, content, reasoning, status, error, edited_at, created_at,
-      model_provider_id, model_provider_name, model_id, model_name, thinking_level
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      message.id,
-      conversationId,
-      message.role,
-      message.content,
-      reasoningValue,
-      statusValue,
-      errorValue,
-      editedAtValue,
-      message.createdAt.toISOString(),
-      modelProviderId,
-      modelProviderName,
-      modelId,
-      modelName,
-      thinkingLevel,
-    ],
-  );
+  // Guarantee the parent conversation row exists before inserting, since
+  // messages.conversation_id is a foreign key and a brand-new conversation's
+  // first message can otherwise be saved before its own conversation row is.
+  // A real saveConversation() call (fired on conversation creation) will
+  // overwrite these placeholder values shortly after via INSERT OR REPLACE.
+  await tursoExecuteMany([
+    {
+      sql: `INSERT OR IGNORE INTO conversations (id, title, pinned, tags, created_at, updated_at)
+            VALUES (?, ?, 0, '[]', ?, ?)`,
+      args: [conversationId, "New chat", nowIso, nowIso],
+    },
+    {
+      sql: `INSERT OR REPLACE INTO messages (
+        id, conversation_id, role, content, reasoning, status, error, edited_at, created_at,
+        model_provider_id, model_provider_name, model_id, model_name, thinking_level
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [
+        message.id,
+        conversationId,
+        message.role,
+        message.content,
+        reasoningValue,
+        statusValue,
+        errorValue,
+        editedAtValue,
+        nowIso,
+        modelProviderId,
+        modelProviderName,
+        modelId,
+        modelName,
+        thinkingLevel,
+      ],
+    },
+  ]);
 }
 
 export async function truncateMessages(conversationId: string, messageId: string): Promise<void> {
