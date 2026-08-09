@@ -1,11 +1,6 @@
 mod proxy;
 
 #[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
-#[tauri::command]
 fn write_file(dest: String, contents: Vec<u8>) -> Result<(), String> {
     std::fs::write(&dest, &contents).map_err(|error| error.to_string())
 }
@@ -17,7 +12,6 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(proxy::StreamState::default())
         .invoke_handler(tauri::generate_handler![
-            greet,
             proxy::proxy,
             proxy::proxy_stream,
             proxy::abort_stream,
