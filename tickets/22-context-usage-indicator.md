@@ -4,19 +4,19 @@
 
 **Blocked by:** #21 - Context window table and token estimator.
 
-**Status:** Not started
+**Status:** Done
 
 ## Tasks
 
 ### `message-input.tsx`
 
-- [ ] Add `messages` to the existing `useChat()` destructure (currently only pulls `sendMessage, stop, isGenerating, canSend, isOffline`)
-- [ ] New `ContextUsageIndicator` component computing "current" = system prompt + summary (none exists until #23, treat as empty) + all messages + pending input text - exactly what the next request would send
-- [ ] Render in the footer row, right-aligned near the "AI can make mistakes" disclaimer
-- [ ] Color states: default / amber >= 70% / red >= 90%; optionally a thin progress bar
+- [x] Add `messages` to the existing `useChat()` destructure (currently only pulls `sendMessage, stop, isGenerating, canSend, isOffline`)
+- [x] New `ContextUsageIndicator` component computing "current" = system prompt + summary (none exists until #23, treat as empty) + all messages + pending input text - exactly what the next request would send
+- [x] Render in the footer row, right-aligned near the "AI can make mistakes" disclaimer
+- [x] Color states: default / amber >= 70% / red >= 90%; optionally a thin progress bar
 
 ### Verify
 
-- [ ] Open a long conversation, watch the number
-- [ ] Type in the box, watch it climb
-- [ ] Send a message and watch the number keep updating while the response streams in, rather than freezing
+- [x] Open a long conversation, watch the number
+- [x] Type in the box, watch it climb
+- [x] Send a message and watch the number keep updating while the response streams in, rather than freezing

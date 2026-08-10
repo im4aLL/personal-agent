@@ -38,8 +38,14 @@ import {
 } from "#components/ui/dropdown-menu";
 import { Popover, PopoverContent, PopoverAnchor } from "#components/ui/popover";
 import { Textarea } from "#components/ui/textarea";
-import { useChat } from "#hooks/use-chat";
-import type { Attachment } from "#lib/types/chat";
+import { systemPromptFromState, useChat } from "#hooks/use-chat";
+import {
+  estimatePendingTokens,
+  estimateTextTokens,
+  estimateTokens,
+  getContextWindow,
+} from "#lib/context";
+import type { Attachment, Message } from "#lib/types/chat";
 import { cn } from "#lib/utils";
 import { useAgentsStore } from "#store/agents";
 import { useChatStore } from "#store/chat";
@@ -414,11 +420,81 @@ function SlashCommandAutocomplete({
   );
 }
 
+function formatTokenCount(tokens: number): string {
+  if (tokens >= 1_000_000) return `${trimTrailingZero((tokens / 1_000_000).toFixed(1))}M`;
+  if (tokens >= 1_000) return `${trimTrailingZero((tokens / 1_000).toFixed(1))}k`;
+  return String(tokens);
+}
+
+function trimTrailingZero(formatted: string): string {
+  return formatted.endsWith(".0") ? formatted.slice(0, -2) : formatted;
+}
+
+function ContextUsageIndicator({
+  messages,
+  systemPrompt,
+  pendingText,
+  pendingAttachments,
+  providerBaseUrl,
+  modelId,
+  className,
+}: {
+  messages: Message[];
+  systemPrompt: string;
+  pendingText: string;
+  pendingAttachments: Attachment[];
+  providerBaseUrl: string;
+  modelId: string;
+  className?: string;
+}) {
+  // "Current" mirrors exactly what the next request would send: system
+  // prompt + summary (none exists until conversation summarization ships) +
+  // all messages + whatever is still sitting unsent in the textarea
+  // (including pending attachments and any slash-activated skill/agent
+  // content the caller has already folded into pendingText/systemPrompt).
+  const tokens = useMemo(
+    () =>
+      estimateTokens(messages) +
+      estimateTextTokens(systemPrompt) +
+      estimatePendingTokens(pendingText, pendingAttachments),
+    [messages, systemPrompt, pendingText, pendingAttachments],
+  );
+  const contextWindow = useMemo(
+    () => getContextWindow(providerBaseUrl, modelId),
+    [providerBaseUrl, modelId],
+  );
+  const ratio = contextWindow > 0 ? tokens / contextWindow : 0;
+
+  const colorClass =
+    ratio >= 0.9 ? "text-destructive" : ratio >= 0.7 ? "text-amber-500" : "text-muted-foreground";
+  const barColorClass =
+    ratio >= 0.9 ? "bg-destructive" : ratio >= 0.7 ? "bg-amber-500" : "bg-muted-foreground";
+
+  return (
+    <div className={cn("flex flex-col items-end gap-1", className)}>
+      <span
+        className={cn("text-xs tabular-nums", colorClass)}
+        role="status"
+        aria-live="off"
+        aria-label={`Context usage: ${formatTokenCount(tokens)} of ${formatTokenCount(contextWindow)} tokens`}
+      >
+        {formatTokenCount(tokens)} / {formatTokenCount(contextWindow)}
+      </span>
+      <div className="h-0.5 w-16 overflow-hidden rounded-full bg-muted">
+        <div
+          className={cn("h-full rounded-full transition-all", barColorClass)}
+          style={{ width: `${Math.min(100, ratio * 100)}%` }}
+        />
+      </div>
+    </div>
+  );
+}
+
 export function MessageInput() {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [slashOpen, setSlashOpen] = useState(false);
-  const { sendMessage, stop, isGenerating, canSend, isOffline } = useChat();
+  const { sendMessage, stop, isGenerating, canSend, isOffline, messages, systemPrompt } = useChat();
   const { fixedWidth } = useChatWidth();
   const selectedModel = useChatStore((state) => state.selectedModel);
   const disabledModels = useChatStore((state) => state.disabledModels);
@@ -469,6 +545,58 @@ export function MessageInput() {
   }, [activeAgentId, agents]);
 
   const hasActiveItems = activeInstructionName || activeSkillName || activeAgentName;
+
+  // Mirrors the slash-command parsing in useChat's sendMessage: while
+  // composing "/name rest", the skill/agent it would activate replaces
+  // whatever currently occupies that slot (activateSkill/activateAgent
+  // overwrite, they don't stack), and the "/name " prefix itself is
+  // stripped from what actually gets sent as content.
+  const slashActivation = useMemo(() => {
+    const match = value.match(/^\/(\S+)(?:\s+([\s\S]*))?$/);
+    if (!match) return null;
+    const commandName = match[1] ?? "";
+    const rest = match[2] ?? "";
+
+    const skill = skills.find((s) => s.name.toLowerCase() === commandName.toLowerCase());
+    if (skill) return { kind: "skill" as const, id: skill.id, rest };
+
+    const agent = agents.find((a) => a.name.toLowerCase() === commandName.toLowerCase());
+    if (agent) return { kind: "agent" as const, id: agent.id, rest };
+
+    return null;
+  }, [value, skills, agents]);
+
+  const pendingText = slashActivation ? slashActivation.rest : value;
+  // sendMessage only falls back to "Hello" when it would otherwise send an
+  // empty message that still carries a payload - attachments, or a matched
+  // slash command with nothing after it. A plain empty textarea never
+  // sends, so it must not pick up the fallback either.
+  const trimmedPendingText = pendingText.trim();
+  const effectivePendingText =
+    trimmedPendingText || (attachments.length > 0 || slashActivation ? "Hello" : "");
+
+  const pendingSystemPrompt = useMemo(() => {
+    if (!slashActivation) return systemPrompt ?? "";
+    return (
+      systemPromptFromState({
+        activeInstructionId,
+        activeSkillId: slashActivation.kind === "skill" ? slashActivation.id : activeSkillId,
+        activeAgentId: slashActivation.kind === "agent" ? slashActivation.id : activeAgentId,
+        userInstructions,
+        skills,
+        customAgents: agents,
+      }) ?? ""
+    );
+  }, [
+    slashActivation,
+    systemPrompt,
+    activeInstructionId,
+    activeSkillId,
+    activeAgentId,
+    userInstructions,
+    skills,
+    agents,
+  ]);
 
   // Slash command detection
   const slashQuery = useMemo(() => {
@@ -838,6 +966,17 @@ export function MessageInput() {
           </Button>
           <ModelSelector />
           <ThinkingSelector />
+          {activeProvider && (
+            <ContextUsageIndicator
+              className="ml-auto"
+              messages={messages}
+              systemPrompt={pendingSystemPrompt}
+              pendingText={effectivePendingText}
+              pendingAttachments={attachments}
+              providerBaseUrl={activeProvider.baseUrl}
+              modelId={selectedModel.modelId}
+            />
+          )}
         </div>
       </div>
       <p className="mt-2 text-center text-xs text-muted-foreground">

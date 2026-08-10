@@ -13,7 +13,12 @@ import {
   loadTavilyApiKey,
   loadWebSearchEnabled,
 } from "#lib/config";
-import { estimateTokens, getContextWindow, IMAGE_MIME_TYPES } from "#lib/context";
+import {
+  estimateTextTokens,
+  estimateTokens,
+  getContextWindow,
+  IMAGE_MIME_TYPES,
+} from "#lib/context";
 import { generateConversationTitle } from "#lib/title";
 import { createDuckDuckGoSearchTool } from "#lib/tools/duckduckgo-search";
 import { createFetchUrlTool } from "#lib/tools/fetch-url";
@@ -130,7 +135,7 @@ function buildUserContent(message: Message): UserContent {
 const BASE_SYSTEM_PROMPT =
   "You are an AI assistant in Personal Agent, a desktop app created by Hadi (https://github.com/im4aLL).";
 
-function systemPromptFromState(state: {
+export function systemPromptFromState(state: {
   activeInstructionId: string | null;
   activeSkillId: string | null;
   activeAgentId: string | null;
@@ -268,14 +273,14 @@ export function useChat() {
       return;
     }
 
-    const tokens = estimateTokens(conversation.messages);
+    const tokens = estimateTokens(conversation.messages) + estimateTextTokens(systemPrompt ?? "");
     const window = getContextWindow(activeProvider.baseUrl, selectedModel.modelId);
 
     // eslint-disable-next-line no-console
     console.log(
-      `[personal-agent] context usage: ~${tokens} tokens / ${window} window (${conversation.messages.length} messages)`,
+      `[personal-agent] context usage: ~${tokens} tokens / ${window} window (${conversation.messages.length} messages, incl. system prompt)`,
     );
-  }, [conversation, activeProvider, selectedModel.modelId]);
+  }, [conversation, activeProvider, selectedModel.modelId, systemPrompt]);
 
   const canSend = Boolean(
     activeProvider &&
@@ -669,6 +674,7 @@ export function useChat() {
 
   return {
     messages: conversation?.messages ?? [],
+    systemPrompt,
     isGenerating,
     isOffline,
     canSend,
