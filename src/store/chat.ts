@@ -29,7 +29,7 @@ import {
   truncateMessages,
 } from "#lib/turso-repository";
 import type { Conversation, ConversationSummary, Message, MessageModelInfo } from "#lib/types/chat";
-import { applyMessageEdit, regenerateMessages } from "./chat-helpers";
+import { applyMessageEdit, isSummaryInvalidatedBy, regenerateMessages } from "./chat-helpers";
 
 export type { ConnectionMode, ProviderInput };
 
@@ -850,12 +850,34 @@ export const useChatStore = create<ChatState>((set, get) => ({
         return {};
       }
 
-      return {
-        conversations: updateConversation(state, conversationId, (conversation) => ({
-          ...conversation,
-          messages: regenerateMessages(conversation.messages),
-        })),
-      };
+      const lastMessage = conversation.messages[conversation.messages.length - 1];
+      const invalidateSummary =
+        lastMessage?.role === "assistant" &&
+        isSummaryInvalidatedBy(
+          conversation.messages,
+          lastMessage.id,
+          conversation.summarizedUpToId,
+        );
+
+      const nextConversations = updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: regenerateMessages(conversation.messages),
+        ...(invalidateSummary ? { summary: null, summarizedUpToId: null } : {}),
+      }));
+
+      // Fire-and-forget, same as the other saveConversation calls in this
+      // file. If auto-compact runs right after this and persists a fresh
+      // summary, that write is expected to land later (it waits on an LLM
+      // call) and win; a slow Turso write racing ahead of it is unguarded,
+      // consistent with addMessage/togglePin/setConversationTags elsewhere.
+      if (invalidateSummary && isTursoConfigured()) {
+        const updated = nextConversations.find((c) => c.id === conversationId);
+        if (updated) {
+          void saveConversation(updated);
+        }
+      }
+
+      return { conversations: nextConversations };
     });
   },
 
@@ -866,6 +888,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // Messages not loaded yet - cannot edit.
         return {};
       }
+
+      const editedMessages = applyMessageEdit(conversation.messages, messageId, content);
+      const editApplied = editedMessages !== conversation.messages;
+      const invalidateSummary =
+        editApplied &&
+        isSummaryInvalidatedBy(conversation.messages, messageId, conversation.summarizedUpToId);
 
       if (isTursoConfigured()) {
         void (async () => {
@@ -881,7 +909,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       return {
         conversations: updateConversation(state, conversationId, (conversation) => ({
           ...conversation,
-          messages: applyMessageEdit(conversation.messages, messageId, content),
+          messages: editedMessages,
+          ...(invalidateSummary ? { summary: null, summarizedUpToId: null } : {}),
         })),
       };
     });

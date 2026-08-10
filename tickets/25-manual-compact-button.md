@@ -13,4 +13,4 @@
 
 ### Verify
 
-- [ ] Click the button on a short conversation, confirm it still compacts and the usage indicator updates accordingly
+- [x] Click the button on a short conversation, confirm it still compacts and the usage indicator updates accordingly
