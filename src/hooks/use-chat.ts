@@ -124,10 +124,11 @@ function logProviderCall(details: {
 }
 
 function buildUserContent(message: Message): UserContent {
-  const imageAttachments =
-    message.attachments?.filter((a) => a.data && IMAGE_MIME_TYPES.includes(a.type)) ?? [];
+  const attachments = message.attachments ?? [];
+  const imageAttachments = attachments.filter((a) => a.data && IMAGE_MIME_TYPES.includes(a.type));
+  const textAttachments = attachments.filter((a) => a.data && !IMAGE_MIME_TYPES.includes(a.type));
 
-  if (imageAttachments.length === 0) {
+  if (imageAttachments.length === 0 && textAttachments.length === 0) {
     return message.content;
   }
 
@@ -136,6 +137,12 @@ function buildUserContent(message: Message): UserContent {
   for (const attachment of imageAttachments) {
     if (attachment.data) {
       parts.push({ type: "image", image: attachment.data });
+    }
+  }
+
+  for (const attachment of textAttachments) {
+    if (attachment.data) {
+      parts.push({ type: "text", text: `File: ${attachment.name}\n\n${attachment.data}` });
     }
   }
 

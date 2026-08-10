@@ -113,22 +113,31 @@ export function resolveContextWindow(
   return getContextWindow(baseUrl, modelId, knownWindow);
 }
 
-// The only attachments buildUserContent (#hooks/use-chat) actually sends to
-// the model; anything else is dropped there, so it must not be counted here.
+// Attachments matching these types get a flat per-image token estimate in
+// buildUserContent (#hooks/use-chat); everything else with a `data` payload
+// is sent as its raw text content, so it's counted by length below instead.
 export const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 const CHARS_PER_TOKEN = 4;
 const TOKENS_PER_IMAGE = 1000;
 
-function countQualifyingImages(attachments: Attachment[] | undefined): number {
-  return (
-    attachments?.filter(
-      (attachment) => attachment.data && IMAGE_MIME_TYPES.includes(attachment.type),
-    ).length ?? 0
-  );
+// Kept in sync with buildUserContent (#hooks/use-chat): images get the flat
+// per-image estimate, everything else with a `data` payload (JSON, Markdown,
+// extracted PDF text, ...) is counted as text since it's sent as-is.
+function estimateAttachmentTokens(attachments: Attachment[] | undefined): number {
+  if (!attachments) return 0;
+
+  let tokens = 0;
+  for (const attachment of attachments) {
+    if (!attachment.data) continue;
+    tokens += IMAGE_MIME_TYPES.includes(attachment.type)
+      ? TOKENS_PER_IMAGE
+      : Math.ceil(attachment.data.length / CHARS_PER_TOKEN);
+  }
+  return tokens;
 }
 
-type TokenMemoEntry = { contentLength: number; imageCount: number; tokens: number };
+type TokenMemoEntry = { contentLength: number; attachmentTokens: number; tokens: number };
 
 // Keyed by (id, content.length, imageCount): a streaming assistant message
 // keeps a stable id while its content grows in place, so the length must be
@@ -141,19 +150,18 @@ const TOKEN_MEMO_LIMIT = 2000;
 const tokenMemo = new Map<string, TokenMemoEntry>();
 
 function estimateMessageTokens(message: Message): number {
-  const imageCount = countQualifyingImages(message.attachments);
+  const attachmentTokens = estimateAttachmentTokens(message.attachments);
   const cached = tokenMemo.get(message.id);
 
   if (
     cached &&
     cached.contentLength === message.content.length &&
-    cached.imageCount === imageCount
+    cached.attachmentTokens === attachmentTokens
   ) {
     return cached.tokens;
   }
 
-  const tokens =
-    Math.ceil(message.content.length / CHARS_PER_TOKEN) + imageCount * TOKENS_PER_IMAGE;
+  const tokens = Math.ceil(message.content.length / CHARS_PER_TOKEN) + attachmentTokens;
 
   if (!cached && tokenMemo.size >= TOKEN_MEMO_LIMIT) {
     const oldestKey = tokenMemo.keys().next().value;
@@ -162,15 +170,16 @@ function estimateMessageTokens(message: Message): number {
     }
   }
 
-  tokenMemo.set(message.id, { contentLength: message.content.length, imageCount, tokens });
+  tokenMemo.set(message.id, { contentLength: message.content.length, attachmentTokens, tokens });
 
   return tokens;
 }
 
 /**
- * Characters/4 heuristic, memoized per message. Attachment `data` (base64
- * image payload) is never counted as text - images use a flat per-image
- * estimate instead, since counting the blob would wildly overcount.
+ * Characters/4 heuristic, memoized per message. Attachment tokens are
+ * estimated separately via `estimateAttachmentTokens`: images use a flat
+ * per-image estimate (counting the base64 blob as text would wildly
+ * overcount), everything else is counted by its text length.
  */
 export function estimateTokens(messages: Message[]): number {
   return messages.reduce((total, message) => total + estimateMessageTokens(message), 0);
@@ -227,11 +236,10 @@ export function estimateTextTokens(text: string): number {
 }
 
 /**
- * Same chars/4 + per-image estimate as `estimateTokens`, for a draft that
+ * Same chars/4 + attachment estimate as `estimateTokens`, for a draft that
  * hasn't become a `Message` yet - the input box's pending text and
- * attachments. Kept in sync with `buildUserContent` (#hooks/use-chat) via
- * the shared `IMAGE_MIME_TYPES` list.
+ * attachments.
  */
 export function estimatePendingTokens(text: string, attachments: Attachment[] | undefined): number {
-  return estimateTextTokens(text) + countQualifyingImages(attachments) * TOKENS_PER_IMAGE;
+  return estimateTextTokens(text) + estimateAttachmentTokens(attachments);
 }

@@ -182,7 +182,7 @@ export function MessageBubble({
                   {message.attachments.map((attachment) => (
                     <div
                       key={attachment.id}
-                      className="flex items-center gap-2 rounded-md bg-black/10 dark:bg-white/10 px-2 py-1 text-xs"
+                      className="flex items-center gap-2 rounded-md bg-black/10 dark:bg-white/10 p-2 text-xs"
                     >
                       {attachment.type.startsWith("image/") && attachment.data ? (
                         <img

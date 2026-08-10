@@ -1,5 +1,6 @@
 mod duckduckgo_search;
 mod google_search;
+mod pdf_text;
 mod proxy;
 mod search_window;
 
@@ -126,6 +127,7 @@ pub fn run() {
             google_search::collect_google_results,
             duckduckgo_search::duckduckgo_search,
             duckduckgo_search::collect_duckduckgo_results,
+            pdf_text::extract_pdf_text,
             write_file
         ])
         .setup(|app| {

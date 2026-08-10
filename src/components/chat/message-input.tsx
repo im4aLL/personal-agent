@@ -1,5 +1,6 @@
 "use client";
 
+import { invoke } from "@tauri-apps/api/core";
 import {
   ArrowUpIcon,
   BotIcon,
@@ -57,6 +58,7 @@ import { selectSelectedConversation, useChatStore } from "#store/chat";
 const MAX_MESSAGE_LENGTH = 50000;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+const PDF_MIME_TYPE = "application/pdf";
 
 function createAttachmentId(): string {
   return `att-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -68,28 +70,52 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-async function readFileAsAttachment(file: File): Promise<Attachment> {
+async function extractPdfText(file: File): Promise<string> {
+  const bytes = new Uint8Array(await file.arrayBuffer());
+
+  try {
+    return await invoke<string>("extract_pdf_text", { bytes: Array.from(bytes) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return `[Could not read "${file.name}": ${message}]`;
+  }
+}
+
+async function readFileAsText(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-
-    reader.onload = () => {
-      resolve({
-        id: createAttachmentId(),
-        name: file.name,
-        type: file.type || "application/octet-stream",
-        size: file.size,
-        data: reader.result as string,
-      });
-    };
-
+    reader.onload = () => resolve(reader.result as string);
     reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
-
-    if (IMAGE_MIME_TYPES.includes(file.type)) {
-      reader.readAsDataURL(file);
-    } else {
-      reader.readAsText(file);
-    }
+    reader.readAsText(file);
   });
+}
+
+async function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function readFileAsAttachment(file: File): Promise<Attachment> {
+  const isImage = IMAGE_MIME_TYPES.includes(file.type);
+  const isPdf = file.type === PDF_MIME_TYPE;
+
+  const data = isImage
+    ? await readFileAsDataUrl(file)
+    : isPdf
+      ? await extractPdfText(file)
+      : await readFileAsText(file);
+
+  return {
+    id: createAttachmentId(),
+    name: file.name,
+    type: file.type || "application/octet-stream",
+    size: file.size,
+    data,
+  };
 }
 
 async function blobToAttachment(blob: Blob, name: string): Promise<Attachment> {
@@ -487,11 +513,13 @@ function ContextUsageIndicator({
 
   const colorClass =
     ratio >= 0.9 ? "text-destructive" : ratio >= 0.7 ? "text-amber-500" : "text-muted-foreground";
-  const barColorClass =
-    ratio >= 0.9 ? "bg-destructive" : ratio >= 0.7 ? "bg-amber-500" : "bg-muted-foreground";
+
+  const radius = 6;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - Math.min(1, ratio));
 
   return (
-    <div className={cn("flex flex-col items-end gap-1", className)}>
+    <div className={cn("flex items-center gap-1.5", className)}>
       <span
         className={cn("text-xs tabular-nums", colorClass)}
         role="status"
@@ -500,12 +528,27 @@ function ContextUsageIndicator({
       >
         {formatTokenCount(tokens)} / {formatTokenCount(contextWindow)}
       </span>
-      <div className="h-0.5 w-16 overflow-hidden rounded-full bg-muted">
-        <div
-          className={cn("h-full rounded-full transition-all", barColorClass)}
-          style={{ width: `${Math.min(100, ratio * 100)}%` }}
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        className="-rotate-90 shrink-0"
+        aria-hidden="true"
+        role="presentation"
+      >
+        <circle cx="8" cy="8" r={radius} fill="none" strokeWidth="2" className="stroke-muted" />
+        <circle
+          cx="8"
+          cy="8"
+          r={radius}
+          fill="none"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeDasharray={circumference}
+          strokeDashoffset={dashOffset}
+          className={cn("stroke-current transition-[stroke-dashoffset]", colorClass)}
         />
-      </div>
+      </svg>
     </div>
   );
 }
@@ -995,7 +1038,7 @@ export function MessageInput() {
             multiple
             className="hidden"
             onChange={handleFilesSelected}
-            accept="image/*,.txt,.csv,.json,.xml,.html,.css,.js,.ts,.tsx,.jsx,.md,.yaml,.yml,.toml,.ini,.cfg,.log,.env"
+            accept="image/*,.pdf,application/pdf,.txt,.csv,.json,.xml,.html,.css,.js,.ts,.tsx,.jsx,.md,.yaml,.yml,.toml,.ini,.cfg,.log,.env"
           />
           <Button
             type="button"
