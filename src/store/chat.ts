@@ -88,6 +88,11 @@ export type ChatState = {
   deleteConversation: (id: string) => void;
   togglePin: (id: string) => void;
   setConversationTitle: (id: string, title: string) => void;
+  setConversationSummary: (
+    id: string,
+    summary: string | null,
+    summarizedUpToId: string | null,
+  ) => void;
   setConversationTags: (id: string, tags: string[]) => void;
   addMessage: (conversationId: string, message: Message) => void;
   appendMessageContent: (conversationId: string, messageId: string, delta: string) => void;
@@ -485,6 +490,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       conversations: updateConversation(state, id, (conversation) => ({
         ...conversation,
         title: trimmed || conversation.title,
+      })),
+    }));
+  },
+
+  setConversationSummary: (id, summary, summarizedUpToId) => {
+    set((state) => ({
+      conversations: updateConversation(state, id, (conversation) => ({
+        ...conversation,
+        summary,
+        summarizedUpToId,
       })),
     }));
   },

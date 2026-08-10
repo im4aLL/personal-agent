@@ -40,6 +40,7 @@ import { Popover, PopoverContent, PopoverAnchor } from "#components/ui/popover";
 import { Textarea } from "#components/ui/textarea";
 import { systemPromptFromState, useChat } from "#hooks/use-chat";
 import {
+  buildOutgoingContext,
   estimatePendingTokens,
   estimateTextTokens,
   estimateTokens,
@@ -48,7 +49,7 @@ import {
 import type { Attachment, Message } from "#lib/types/chat";
 import { cn } from "#lib/utils";
 import { useAgentsStore } from "#store/agents";
-import { useChatStore } from "#store/chat";
+import { selectSelectedConversation, useChatStore } from "#store/chat";
 
 const MAX_MESSAGE_LENGTH = 50000;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
@@ -432,6 +433,8 @@ function trimTrailingZero(formatted: string): string {
 
 function ContextUsageIndicator({
   messages,
+  summary,
+  summarizedUpToId,
   systemPrompt,
   pendingText,
   pendingAttachments,
@@ -440,6 +443,8 @@ function ContextUsageIndicator({
   className,
 }: {
   messages: Message[];
+  summary: string | null | undefined;
+  summarizedUpToId: string | null | undefined;
   systemPrompt: string;
   pendingText: string;
   pendingAttachments: Attachment[];
@@ -448,17 +453,24 @@ function ContextUsageIndicator({
   className?: string;
 }) {
   // "Current" mirrors exactly what the next request would send: system
-  // prompt + summary (none exists until conversation summarization ships) +
-  // all messages + whatever is still sitting unsent in the textarea
-  // (including pending attachments and any slash-activated skill/agent
-  // content the caller has already folded into pendingText/systemPrompt).
-  const tokens = useMemo(
-    () =>
-      estimateTokens(messages) +
-      estimateTextTokens(systemPrompt) +
-      estimatePendingTokens(pendingText, pendingAttachments),
-    [messages, systemPrompt, pendingText, pendingAttachments],
-  );
+  // prompt + summary (if any) + tail messages + whatever is still sitting
+  // unsent in the textarea (including pending attachments and any
+  // slash-activated skill/agent content the caller has already folded into
+  // pendingText/systemPrompt).
+  const tokens = useMemo(() => {
+    const outgoing = buildOutgoingContext(messages, { summary, summarizedUpToId });
+    const combinedSystemPrompt = outgoing.summaryText
+      ? [systemPrompt, `Summary of earlier conversation:\n${outgoing.summaryText}`]
+          .filter(Boolean)
+          .join("\n\n")
+      : systemPrompt;
+
+    return (
+      estimateTokens(outgoing.messages) +
+      estimateTextTokens(combinedSystemPrompt) +
+      estimatePendingTokens(pendingText, pendingAttachments)
+    );
+  }, [messages, summary, summarizedUpToId, systemPrompt, pendingText, pendingAttachments]);
   const contextWindow = useMemo(
     () => getContextWindow(providerBaseUrl, modelId),
     [providerBaseUrl, modelId],
@@ -495,6 +507,7 @@ export function MessageInput() {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [slashOpen, setSlashOpen] = useState(false);
   const { sendMessage, stop, isGenerating, canSend, isOffline, messages, systemPrompt } = useChat();
+  const conversation = useChatStore(selectSelectedConversation);
   const { fixedWidth } = useChatWidth();
   const selectedModel = useChatStore((state) => state.selectedModel);
   const disabledModels = useChatStore((state) => state.disabledModels);
@@ -970,6 +983,8 @@ export function MessageInput() {
             <ContextUsageIndicator
               className="ml-auto"
               messages={messages}
+              summary={conversation?.summary}
+              summarizedUpToId={conversation?.summarizedUpToId}
               systemPrompt={pendingSystemPrompt}
               pendingText={effectivePendingText}
               pendingAttachments={attachments}

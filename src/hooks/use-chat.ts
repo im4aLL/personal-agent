@@ -14,12 +14,14 @@ import {
   loadWebSearchEnabled,
 } from "#lib/config";
 import {
+  buildOutgoingContext,
   estimateTextTokens,
   estimateTokens,
   getContextWindow,
   IMAGE_MIME_TYPES,
+  shouldCompact,
 } from "#lib/context";
-import { generateConversationTitle } from "#lib/title";
+import { generateConversationSummary, generateConversationTitle } from "#lib/title";
 import { createDuckDuckGoSearchTool } from "#lib/tools/duckduckgo-search";
 import { createFetchUrlTool } from "#lib/tools/fetch-url";
 import { createGoogleSearchTool } from "#lib/tools/google-search";
@@ -36,6 +38,18 @@ import {
 
 const MAX_STREAM_RETRIES = 2;
 const STREAM_RETRY_BASE_DELAY_MS = 1000;
+
+// Messages kept raw (never summarized) once compaction fires, per
+// plans/context-compaction.md.
+const COMPACTION_TAIL_SIZE = 18;
+
+function compactionTailSize(messageCount: number): number {
+  if (messageCount <= 1) {
+    return 0;
+  }
+
+  return Math.min(COMPACTION_TAIL_SIZE, messageCount - 1);
+}
 
 const THINKING_TO_REASONING: Record<string, "none" | "low" | "medium" | "high"> = {
   off: "none",
@@ -193,6 +207,7 @@ export function useChat() {
   const setMessageStatus = useChatStore((state) => state.setMessageStatus);
   const setMessageError = useChatStore((state) => state.setMessageError);
   const setConversationTitle = useChatStore((state) => state.setConversationTitle);
+  const setConversationSummary = useChatStore((state) => state.setConversationSummary);
   const persistConversation = useChatStore((state) => state.persistConversation);
   const deleteMessage = useChatStore((state) => state.deleteMessage);
   const regenerateMessage = useChatStore((state) => state.regenerate);
@@ -273,12 +288,21 @@ export function useChat() {
       return;
     }
 
-    const tokens = estimateTokens(conversation.messages) + estimateTextTokens(systemPrompt ?? "");
+    const outgoing = buildOutgoingContext(conversation.messages, {
+      summary: conversation.summary,
+      summarizedUpToId: conversation.summarizedUpToId,
+    });
+    const combinedSystemPrompt = outgoing.summaryText
+      ? [systemPrompt, `Summary of earlier conversation:\n${outgoing.summaryText}`]
+          .filter(Boolean)
+          .join("\n\n")
+      : (systemPrompt ?? "");
+    const tokens = estimateTokens(outgoing.messages) + estimateTextTokens(combinedSystemPrompt);
     const window = getContextWindow(activeProvider.baseUrl, selectedModel.modelId);
 
     // eslint-disable-next-line no-console
     console.log(
-      `[personal-agent] context usage: ~${tokens} tokens / ${window} window (${conversation.messages.length} messages, incl. system prompt)`,
+      `[personal-agent] context usage: ~${tokens} tokens / ${window} window (${outgoing.messages.length} outgoing messages, incl. system prompt${outgoing.summaryText ? " + summary" : ""})`,
     );
   }, [conversation, activeProvider, selectedModel.modelId, systemPrompt]);
 
@@ -298,6 +322,10 @@ export function useChat() {
         return;
       }
 
+      setIsGenerating(true);
+      abortControllerRef.current = new AbortController();
+      const compactionSignal = abortControllerRef.current.signal;
+
       const modelInfo: MessageModelInfo = getSelectedModelInfo({
         providers,
         selectedModel,
@@ -313,23 +341,108 @@ export function useChat() {
         thinkingLevel,
       };
 
+      const storedConversation = useChatStore
+        .getState()
+        .conversations.find((item) => item.id === conversationId);
+
+      let outgoing = buildOutgoingContext(contextMessages, {
+        summary: storedConversation?.summary,
+        summarizedUpToId: storedConversation?.summarizedUpToId,
+      });
+
+      const hasValidSummary = outgoing.summaryText !== null;
+      const rawTailSize = compactionTailSize(contextMessages.length);
+      let compactionFailed = false;
+
+      if (!hasValidSummary && rawTailSize > 0) {
+        const tokens = estimateTokens(contextMessages) + estimateTextTokens(systemPrompt ?? "");
+        const contextWindow = getContextWindow(activeProvider.baseUrl, selectedModel.modelId);
+
+        if (shouldCompact(tokens, contextWindow)) {
+          const toSummarize = contextMessages.slice(0, contextMessages.length - rawTailSize);
+          const cutoffId = toSummarize[toSummarize.length - 1]?.id;
+
+          if (cutoffId) {
+            const toastId = toast.loading("Compacting context...");
+
+            try {
+              const summaryText = await generateConversationSummary(
+                toSummarize,
+                activeProvider,
+                selectedModel.modelId,
+                compactionSignal,
+              );
+
+              setConversationSummary(conversationId, summaryText, cutoffId);
+              persistConversation(conversationId);
+              outgoing = buildOutgoingContext(contextMessages, {
+                summary: summaryText,
+                summarizedUpToId: cutoffId,
+              });
+
+              if (import.meta.env.DEV) {
+                // eslint-disable-next-line no-console
+                console.log(
+                  `[personal-agent] compacted context: summarized ${toSummarize.length} messages, kept ${rawTailSize} raw`,
+                );
+              }
+            } catch (error) {
+              if (error instanceof DOMException && error.name === "AbortError") {
+                setIsGenerating(false);
+                abortControllerRef.current = null;
+                return;
+              }
+
+              compactionFailed = true;
+
+              if (import.meta.env.DEV) {
+                // eslint-disable-next-line no-console
+                console.error("[personal-agent] compaction failed", error);
+              }
+            } finally {
+              toast.dismiss(toastId);
+            }
+          }
+        }
+      }
+
+      if (compactionFailed && outgoing.summaryText === null) {
+        const tokens = estimateTokens(contextMessages) + estimateTextTokens(systemPrompt ?? "");
+        const contextWindow = getContextWindow(activeProvider.baseUrl, selectedModel.modelId);
+
+        if (shouldCompact(tokens, contextWindow)) {
+          toast.error("Conversation too long to send", {
+            description: "Compaction failed. Try a shorter message or start a new chat.",
+          });
+          setIsGenerating(false);
+          abortControllerRef.current = null;
+          return;
+        }
+
+        toast.error("Failed to compact context", {
+          description: "Sending full history instead.",
+        });
+      }
+
       addMessage(conversationId, assistantMessage);
+
+      const combinedSystemPrompt = outgoing.summaryText
+        ? [systemPrompt, `Summary of earlier conversation:\n${outgoing.summaryText}`]
+            .filter(Boolean)
+            .join("\n\n")
+        : systemPrompt;
 
       logProviderCall({
         providerName: activeProvider.label,
         baseUrl: activeProvider.baseUrl,
         modelId: selectedModel.modelId,
-        messageCount: contextMessages.length,
+        messageCount: outgoing.messages.length,
       });
 
       let lastError: unknown = null;
 
       for (let attempt = 0; attempt <= MAX_STREAM_RETRIES; attempt++) {
         abortControllerRef.current = new AbortController();
-
-        if (attempt === 0) {
-          setIsGenerating(true);
-        }
 
         try {
           const fetchImpl = activeProvider.connectionMode === "proxy" ? proxyFetch : undefined;
@@ -342,14 +455,14 @@ export function useChat() {
           });
 
           const model = provider(selectedModel.modelId);
-          const messages = buildCoreMessages(contextMessages);
+          const messages = buildCoreMessages(outgoing.messages);
           const tools = isGeminiProvider(activeProvider.baseUrl) ? {} : buildEnabledTools();
           const hasTools = Object.keys(tools).length > 0;
 
           const { fullStream } = streamText({
             model,
             messages,
-            ...(systemPrompt ? { system: systemPrompt } : {}),
+            ...(combinedSystemPrompt ? { system: combinedSystemPrompt } : {}),
             ...(hasTools ? { tools, stopWhen: stepCountIs(8) } : {}),
             abortSignal: abortControllerRef.current.signal,
             reasoning:
@@ -481,6 +594,7 @@ export function useChat() {
       setMessageStatus,
       setMessageError,
       setConversationTitle,
+      setConversationSummary,
       persistConversation,
     ],
   );
