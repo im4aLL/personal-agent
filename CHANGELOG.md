@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.3.0
+
+### Features
+- Add context token estimator with a live context-usage indicator in the message input footer (`adcad13`, `14f67fa`)
+- Persist per-conversation summaries with a `summarized_up_to_id` cutoff via a new schema migration (`974b43a`)
+- Implement automatic context compaction: summarize older turns once a conversation approaches its model's context window, keeping a raw tail unsummarized (`9f0b590`)
+- Add a manual "Compact" button and resolve real context windows from provider model metadata (`b8bd005`)
+- Invalidate a conversation's persisted summary automatically when an edit or regenerate touches the already-summarized region (`7953788`)
+
 ## 1.2.0
 
 ### Features
