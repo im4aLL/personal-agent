@@ -162,6 +162,42 @@ export function shouldCompact(tokens: number, window: number): boolean {
   return tokens > 0.7 * window;
 }
 
+export type SummaryState = {
+  summary: string | null | undefined;
+  summarizedUpToId: string | null | undefined;
+};
+
+export type OutgoingContext = {
+  /** Raw messages to send as-is: the tail after `summarizedUpToId`, or full history if no summary applies. */
+  messages: Message[];
+  /** Summary text to fold into the request's system message, or null if none applies. */
+  summaryText: string | null;
+};
+
+/**
+ * Collapses long history into `[summary] + [tail]` when a persisted summary
+ * covers a prefix of `messages`. Falls back to full history when there is no
+ * summary, or the summary's cutoff id is no longer present in `messages`
+ * (e.g. that message was deleted) - sending everything is always correct,
+ * just not always cheap.
+ */
+export function buildOutgoingContext(
+  messages: Message[],
+  { summary, summarizedUpToId }: SummaryState,
+): OutgoingContext {
+  if (!summary || !summarizedUpToId) {
+    return { messages, summaryText: null };
+  }
+
+  const cutoffIndex = messages.findIndex((message) => message.id === summarizedUpToId);
+
+  if (cutoffIndex === -1) {
+    return { messages, summaryText: null };
+  }
+
+  return { messages: messages.slice(cutoffIndex + 1), summaryText: summary };
+}
+
 /**
  * Characters/4 heuristic for plain text that isn't a `Message` - the system
  * prompt and the in-progress draft in the input box. Shares the estimate
