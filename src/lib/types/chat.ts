@@ -36,7 +36,7 @@ export type Message = {
   attachments?: Attachment[];
 };
 
-export type ConversationSummary = Omit<Conversation, "messages">;
+export type ConversationSummary = Omit<Conversation, "messages" | "summary" | "summarizedUpToId">;
 
 export type Conversation = {
   id: string;
@@ -44,6 +44,10 @@ export type Conversation = {
   messages: Message[];
   pinned: boolean;
   tags: string[];
+  /** Persisted compaction summary covering messages up to `summarizedUpToId`. Undefined until loaded from Turso. */
+  summary?: string | null;
+  /** Id of the last message covered by `summary`; undefined until loaded from Turso. */
+  summarizedUpToId?: string | null;
   updatedAt: Date;
   createdAt: Date;
 };

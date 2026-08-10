@@ -6,6 +6,8 @@ interface TursoConversationRow {
   title: string;
   pinned: number | null;
   tags: string | null;
+  summary?: string | null;
+  summarized_up_to_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -136,6 +138,12 @@ export async function runMigrations(): Promise<void> {
 
   if (version < 5) {
     await tursoExecute("UPDATE schema_meta SET version = 5");
+  }
+
+  if (version < 6) {
+    await tursoExecute("ALTER TABLE conversations ADD COLUMN summary TEXT");
+    await tursoExecute("ALTER TABLE conversations ADD COLUMN summarized_up_to_id TEXT");
+    await tursoExecute("UPDATE schema_meta SET version = 6");
   }
 }
 
@@ -276,6 +284,25 @@ export async function loadConversationsForMonth(
   return rows.map(mapRowToSummary);
 }
 
+export async function loadConversationMetadata(
+  conversationId: string,
+): Promise<{ summary: string | null; summarizedUpToId: string | null } | null> {
+  const config = getTursoConfig();
+  if (!config) return null;
+
+  const rows = await tursoSelect<Pick<TursoConversationRow, "summary" | "summarized_up_to_id">>(
+    "SELECT summary, summarized_up_to_id FROM conversations WHERE id = ?",
+    [conversationId],
+  );
+
+  if (rows.length === 0) return null;
+
+  return {
+    summary: rows[0].summary ?? null,
+    summarizedUpToId: rows[0].summarized_up_to_id ?? null,
+  };
+}
+
 export async function loadMessages(conversationId: string): Promise<Message[]> {
   const config = getTursoConfig();
   if (!config) return [];
@@ -290,22 +317,62 @@ export async function loadMessages(conversationId: string): Promise<Message[]> {
   return msgRows.map(mapRowToMessage);
 }
 
+function hasLoadedSummaryFields(
+  conversation: ConversationSummary & {
+    summary?: string | null;
+    summarizedUpToId?: string | null;
+  },
+): conversation is ConversationSummary & {
+  summary: string | null;
+  summarizedUpToId: string | null;
+} {
+  return "summary" in conversation && "summarizedUpToId" in conversation;
+}
+
 export async function saveConversation(
-  conversation: ConversationSummary & { messages?: Message[] },
+  conversation: ConversationSummary & {
+    messages?: Message[];
+    summary?: string | null;
+    summarizedUpToId?: string | null;
+  },
 ): Promise<void> {
-  const requests: Array<{ sql: string; args: unknown[] }> = [
-    {
-      sql: `INSERT OR REPLACE INTO conversations (id, title, pinned, tags, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [
-        conversation.id,
-        conversation.title,
-        conversation.pinned ? 1 : 0,
-        JSON.stringify(conversation.tags ?? []),
-        conversation.createdAt.toISOString(),
-        conversation.updatedAt.toISOString(),
-      ],
-    },
+  const conversationArgs = [
+    conversation.id,
+    conversation.title,
+    conversation.pinned ? 1 : 0,
+    JSON.stringify(conversation.tags ?? []),
+    conversation.createdAt.toISOString(),
+    conversation.updatedAt.toISOString(),
   ];
+
+  const requests: Array<{ sql: string; args: unknown[] }> = hasLoadedSummaryFields(conversation)
+    ? [
+        {
+          sql: `INSERT OR REPLACE INTO conversations (id, title, pinned, tags, summary, summarized_up_to_id, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            conversation.id,
+            conversation.title,
+            conversation.pinned ? 1 : 0,
+            JSON.stringify(conversation.tags ?? []),
+            conversation.summary,
+            conversation.summarizedUpToId,
+            conversation.createdAt.toISOString(),
+            conversation.updatedAt.toISOString(),
+          ],
+        },
+      ]
+    : [
+        {
+          sql: `INSERT INTO conversations (id, title, pinned, tags, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                  title = excluded.title,
+                  pinned = excluded.pinned,
+                  tags = excluded.tags,
+                  updated_at = excluded.updated_at`,
+          args: conversationArgs,
+        },
+      ];
 
   // Only persist messages when they are present and non-empty.
   // An empty or undefined messages array means messages are not loaded yet,

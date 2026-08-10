@@ -4,14 +4,16 @@ import { Loader2Icon, MessageSquareIcon } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { useChat } from "#hooks/use-chat";
 import type { Conversation } from "#lib/types/chat";
+import { cn } from "#lib/utils";
 import { useChatStore } from "#store/chat";
 import { MessageBubble } from "./message-bubble";
 
 interface MessageListProps {
   conversation: Conversation;
+  fixedWidth: boolean;
 }
 
-export function MessageList({ conversation }: MessageListProps) {
+export function MessageList({ conversation, fixedWidth }: MessageListProps) {
   const { retry, regenerate, editMessage, isGenerating } = useChat();
   const containerRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
@@ -68,23 +70,25 @@ export function MessageList({ conversation }: MessageListProps) {
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto"
+      className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-8"
     >
-      {messages.map((message) => (
-        <MessageBubble
-          key={message.id}
-          message={message}
-          isGenerating={isGenerating}
-          onRetry={message.status === "error" ? retry : undefined}
-          onRegenerate={
-            message.role === "assistant" && message.status !== "error" ? regenerate : undefined
-          }
-          onEdit={
-            message.role === "user" ? (content) => editMessage(message.id, content) : undefined
-          }
-        />
-      ))}
-      <div ref={endRef} />
+      <div className={cn("flex w-full flex-1 flex-col", fixedWidth && "max-w-[896px] mx-auto")}>
+        {messages.map((message) => (
+          <MessageBubble
+            key={message.id}
+            message={message}
+            isGenerating={isGenerating}
+            onRetry={message.status === "error" ? retry : undefined}
+            onRegenerate={
+              message.role === "assistant" && message.status !== "error" ? regenerate : undefined
+            }
+            onEdit={
+              message.role === "user" ? (content) => editMessage(message.id, content) : undefined
+            }
+          />
+        ))}
+        <div ref={endRef} />
+      </div>
     </div>
   );
 }
