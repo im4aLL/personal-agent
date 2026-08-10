@@ -1,3 +1,4 @@
+import type { ModelInfo } from "#lib/providers";
 import type { Attachment, Message } from "#lib/types/chat";
 
 // Providers are matched by base URL, not providerId/label: providerId is
@@ -53,12 +54,6 @@ const PROVIDER_WINDOW_RULES: ProviderWindowRules[] = [
     rules: [{ match: /.*/, window: 64_000 }],
   },
   {
-    matchesBaseUrl: (parsed) =>
-      parsed.hostname === "opencode.ai" &&
-      (parsed.pathname === "/zen/go" || parsed.pathname.startsWith("/zen/go/")),
-    rules: [{ match: /.*/, window: 128_000 }],
-  },
-  {
     matchesBaseUrl: (parsed) => isLocalHost(parsed.hostname) && parsed.port === "11434",
     rules: [{ match: /.*/, window: 8_192 }],
   },
@@ -68,7 +63,12 @@ const PROVIDER_WINDOW_RULES: ProviderWindowRules[] = [
   },
 ];
 
-const DEFAULT_CONTEXT_WINDOW = 128_000;
+// Used whenever a provider gives no real context-length data (see
+// resolveContextWindow) and its host isn't in PROVIDER_WINDOW_RULES below -
+// e.g. OpenCode Zen, whose /models response never includes this. 256k is a
+// deliberately conservative guess, not a verified number for any specific
+// model.
+const DEFAULT_CONTEXT_WINDOW = 256_000;
 
 /**
  * Static provider/model -> context window lookup. `/v1/models` never
@@ -77,7 +77,11 @@ const DEFAULT_CONTEXT_WINDOW = 128_000;
  * precedence for any of its models without a more specific rule; the flat
  * 128k fallback only applies when no provider or model rule matches at all.
  */
-export function getContextWindow(baseUrl: string, modelId: string): number {
+export function getContextWindow(baseUrl: string, modelId: string, knownWindow?: number): number {
+  if (typeof knownWindow === "number" && Number.isFinite(knownWindow) && knownWindow > 0) {
+    return knownWindow;
+  }
+
   const parsed = parseBaseUrl(baseUrl);
 
   if (!parsed) {
@@ -93,6 +97,20 @@ export function getContextWindow(baseUrl: string, modelId: string): number {
   const rule = provider.rules.find((entry) => entry.match.test(modelId));
 
   return rule?.window ?? DEFAULT_CONTEXT_WINDOW;
+}
+
+/**
+ * Prefers a model's real context window (e.g. OpenRouter's `context_length`,
+ * captured on ModelInfo by normalizeModelItem in #lib/providers) over the
+ * static PROVIDER_WINDOW_RULES guess.
+ */
+export function resolveContextWindow(
+  baseUrl: string,
+  modelId: string,
+  models: ModelInfo[],
+): number {
+  const knownWindow = models.find((model) => model.id === modelId)?.contextWindow;
+  return getContextWindow(baseUrl, modelId, knownWindow);
 }
 
 // The only attachments buildUserContent (#hooks/use-chat) actually sends to

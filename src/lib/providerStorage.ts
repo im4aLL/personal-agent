@@ -5,6 +5,11 @@ import type { ConnectionMode } from "#lib/providers";
 const PROVIDERS_STORAGE_KEY = "personal-agent:providers";
 const PROVIDER_SYNC_ENABLED_KEY = "personal-agent:provider-sync-enabled";
 
+export type ProviderModelRecord = {
+  id: string;
+  contextWindow?: number;
+};
+
 export type ProviderRecord = {
   id: string;
   name: string;
@@ -13,7 +18,7 @@ export type ProviderRecord = {
   apiKey: string;
   isDefault: boolean;
   connectionMode: ConnectionMode;
-  models?: string[];
+  models?: ProviderModelRecord[];
   updated_at: string;
   syncEnabled?: boolean;
 };
@@ -56,12 +61,40 @@ function normalizeConnectionMode(value: unknown): ConnectionMode {
   return value === "direct" || value === "proxy" ? value : "direct";
 }
 
-function normalizeModels(value: unknown): string[] | undefined {
+function normalizeModelRecord(item: unknown): ProviderModelRecord | null {
+  // Back-compat with data written before contextWindow existed, where
+  // `models` was a plain string[] of ids.
+  if (typeof item === "string") {
+    return item ? { id: item } : null;
+  }
+
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  const candidate = item as { id?: unknown; contextWindow?: unknown };
+  if (typeof candidate.id !== "string" || !candidate.id) {
+    return null;
+  }
+
+  const contextWindow =
+    typeof candidate.contextWindow === "number" &&
+    Number.isFinite(candidate.contextWindow) &&
+    candidate.contextWindow > 0
+      ? candidate.contextWindow
+      : undefined;
+
+  return { id: candidate.id, contextWindow };
+}
+
+function normalizeModels(value: unknown): ProviderModelRecord[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
   }
 
-  const models = value.filter((item): item is string => typeof item === "string");
+  const models = value
+    .map(normalizeModelRecord)
+    .filter((item): item is ProviderModelRecord => item !== null);
   return models.length > 0 ? models : undefined;
 }
 
@@ -109,7 +142,7 @@ function recordsEqual(left: ProviderRecord, right: ProviderRecord): boolean {
     left.isDefault === right.isDefault &&
     left.connectionMode === right.connectionMode &&
     (left.syncEnabled ?? false) === (right.syncEnabled ?? false) &&
-    left.models?.join("\n") === right.models?.join("\n")
+    JSON.stringify(left.models) === JSON.stringify(right.models)
   );
 }
 

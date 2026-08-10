@@ -26,10 +26,8 @@ export async function generateConversationTitle(
 
   const { text } = await generateText({
     model,
-    messages: [
-      { role: "system", content: TITLE_PROMPT },
-      { role: "user", content: firstUserMessage },
-    ],
+    system: TITLE_PROMPT,
+    messages: [{ role: "user", content: firstUserMessage }],
   });
 
   const title = text
@@ -75,10 +73,8 @@ export async function generateConversationSummary(
 
   const { text } = await generateText({
     model,
-    messages: [
-      { role: "system", content: SUMMARY_PROMPT },
-      { role: "user", content: conversationText },
-    ],
+    system: SUMMARY_PROMPT,
+    messages: [{ role: "user", content: conversationText }],
     maxOutputTokens: 2048,
     abortSignal,
   });

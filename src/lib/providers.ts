@@ -5,6 +5,7 @@ export type ConnectionMode = "direct" | "proxy";
 export type ModelInfo = {
   id: string;
   name: string;
+  contextWindow?: number;
 };
 
 export type ProviderEndpoint = {
@@ -257,7 +258,7 @@ function normalizeModelItem(item: unknown): ModelInfo | null {
     return null;
   }
 
-  const model = item as { id?: unknown; name?: unknown; model?: unknown };
+  const model = item as { id?: unknown; name?: unknown; model?: unknown; context_length?: unknown };
   const rawId = model.id ?? model.model ?? "";
   const id = typeof rawId === "string" ? rawId : String(rawId);
   if (!id) {
@@ -266,5 +267,15 @@ function normalizeModelItem(item: unknown): ModelInfo | null {
 
   const rawName = model.name ?? id;
   const name = typeof rawName === "string" ? rawName : String(rawName);
-  return { id, name };
+
+  // OpenRouter's OpenAI-compatible /models response extends the standard
+  // shape with this field; other providers simply omit it.
+  const contextWindow =
+    typeof model.context_length === "number" &&
+    Number.isFinite(model.context_length) &&
+    model.context_length > 0
+      ? model.context_length
+      : undefined;
+
+  return { id, name, contextWindow };
 }

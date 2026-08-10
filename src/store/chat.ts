@@ -193,7 +193,13 @@ function recordToProvider(record: ProviderRecord): ProviderInfo {
     apiKey: record.apiKey,
     isDefault: record.isDefault,
     connectionMode: record.connectionMode,
-    models: record.models ? record.models.map((id) => ({ id, name: id })) : [],
+    models: record.models
+      ? record.models.map((model) => ({
+          id: model.id,
+          name: model.id,
+          contextWindow: model.contextWindow,
+        }))
+      : [],
     isLoadingModels: false,
     modelsError: null,
     syncEnabled: record.syncEnabled,
@@ -209,7 +215,7 @@ function providerToRecord(provider: ProviderInfo): ProviderRecord {
     apiKey: provider.apiKey,
     isDefault: provider.isDefault,
     connectionMode: provider.connectionMode,
-    models: provider.models.map((model) => model.id),
+    models: provider.models.map((model) => ({ id: model.id, contextWindow: model.contextWindow })),
     updated_at: new Date().toISOString(),
     syncEnabled: provider.syncEnabled,
   };
