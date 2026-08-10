@@ -70,7 +70,24 @@ npm run tauri dev
 - Conversation search with debounced input
 - Virtualized message list for smooth scrolling in long conversations
 - Tagging and pinning for conversation organization
+- File attachments - images plus common text/code formats (`.txt`, `.md`, `.json`, `.csv`, `.ts`, `.py`-style extensions, etc.)
 - Keyboard shortcuts: Enter to send, Shift+Enter for newline, Esc to stop
+
+### Context management
+
+- Live context-usage indicator (estimated tokens vs. the model's context window) in the message input
+- Automatic conversation summarization when a conversation approaches the context limit, so older turns are compacted instead of dropped
+- Manual "Compact" button to summarize on demand
+- Summaries are invalidated automatically if you edit or regenerate a message they cover, so a stale summary is never reused
+
+### Tools (web search & fetch)
+
+Opt-in per tool in Settings > Web Search - the model only calls a tool if you've turned it on:
+
+- **Web search** - Search the web via your own [Tavily](https://tavily.com) API key
+- **URL fetching** - Let the agent fetch and read the content of a URL
+- **Google / DuckDuckGo search window** - Opens a real, visible search window; you do the searching yourself (handles logins/captchas), then click "Done" to hand the results back to the model
+- Tools are disabled automatically for Gemini providers due to a known upstream issue with tool calls
 
 ### Customization
 
@@ -192,6 +209,16 @@ Examples:
 - A "Technical Writer" agent that produces documentation in your preferred style
 - A "DevOps" agent that knows your infrastructure setup
 
+## Web Search Setup (optional)
+
+Each tool below is off by default and toggled independently in Settings > Web Search.
+
+1. **Web search** - Get a free API key from [Tavily](https://app.tavily.com/home), paste it into Settings > Web Search, click "Save", then enable the "Web search" switch.
+2. **URL fetching** - Enable the "URL fetching" switch to let the agent read the content of a URL it's given.
+3. **Google / DuckDuckGo search window** - Enable either switch to let the agent open a dedicated search window. You perform the search yourself (so logins/captchas aren't a problem) and click "Done - send results" when finished; the results are then handed back to the model.
+
+Tools are unavailable on Gemini-family providers regardless of these settings (see [ARCHITECTURE.md](ARCHITECTURE.md#10-agentic-tool-calling-web-search--fetch)).
+
 ## Turso Database (optional)
 
 Connect to a [Turso](https://turso.tech) database for persistent conversation storage and multi-device sync.
@@ -242,7 +269,11 @@ To back up your provider configuration without exposing API keys:
 | `src/components/chat/message-input.tsx`     | Input with Enter/Shift+Enter/Esc handling                |
 | `src/components/settings/provider-form.tsx` | Provider add/edit form with validation                   |
 | `src/components/settings/agents-tab.tsx`    | Custom instructions, skills, and agents management       |
+| `src/components/settings/web-search-tab.tsx`| Web search / fetch / Google / DuckDuckGo tool toggles     |
+| `src/lib/context.ts`                        | Token estimation, context window resolution, compaction  |
+| `src/lib/tools/`                            | AI SDK tool definitions: fetchUrl, webSearch, googleSearch, duckduckgoSearch |
 | `src-tauri/src/proxy.rs`                    | Tauri proxy and streaming backend                        |
+| `src-tauri/src/search_window.rs`            | Scripted webview window for Google/DuckDuckGo scraping    |
 
 ## License
 
