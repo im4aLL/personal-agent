@@ -13,6 +13,7 @@ import {
   loadTavilyApiKey,
   loadWebSearchEnabled,
 } from "#lib/config";
+import { estimateTokens, getContextWindow, IMAGE_MIME_TYPES } from "#lib/context";
 import { generateConversationTitle } from "#lib/title";
 import { createDuckDuckGoSearchTool } from "#lib/tools/duckduckgo-search";
 import { createFetchUrlTool } from "#lib/tools/fetch-url";
@@ -102,8 +103,6 @@ function logProviderCall(details: {
     );
   }
 }
-
-const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
 
 function buildUserContent(message: Message): UserContent {
   const imageAttachments =
@@ -257,6 +256,26 @@ export function useChat() {
     () => providers.find((provider) => provider.id === selectedModel.providerId),
     [providers, selectedModel.providerId],
   );
+
+  useEffect(() => {
+    if (!import.meta.env.DEV || !conversation || !activeProvider) {
+      return;
+    }
+
+    // Skip mid-stream: content grows on every delta, so logging here would
+    // flood the console and re-scan the whole message list each time.
+    if (conversation.messages.some((message) => message.status === "streaming")) {
+      return;
+    }
+
+    const tokens = estimateTokens(conversation.messages);
+    const window = getContextWindow(activeProvider.baseUrl, selectedModel.modelId);
+
+    // eslint-disable-next-line no-console
+    console.log(
+      `[personal-agent] context usage: ~${tokens} tokens / ${window} window (${conversation.messages.length} messages)`,
+    );
+  }, [conversation, activeProvider, selectedModel.modelId]);
 
   const canSend = Boolean(
     activeProvider &&
