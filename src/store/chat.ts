@@ -21,6 +21,7 @@ import {
   deleteMessage as deleteMessageRemote,
   loadConversationSummaries,
   loadConversationsForMonth,
+  loadConversationMetadata,
   loadMessages as loadMessagesRemote,
   runMigrations,
   saveConversation,
@@ -393,6 +394,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       messages: [],
       pinned: false,
       tags: [],
+      summary: null,
+      summarizedUpToId: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -674,13 +677,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ messagesLoading: new Set([...state.messagesLoading, conversationId]) });
 
     try {
-      const messages = await loadMessagesRemote(conversationId);
+      const [messages, metadata] = await Promise.all([
+        loadMessagesRemote(conversationId),
+        loadConversationMetadata(conversationId),
+      ]);
 
       set((currentState) => {
         const existing = currentState.conversations.find((c) => c.id === conversationId);
+        const summaryFields = metadata ?? { summary: null, summarizedUpToId: null };
         const nextConversations = existing
           ? currentState.conversations.map((c) =>
-              c.id === conversationId ? { ...c, messages } : c,
+              c.id === conversationId ? { ...c, messages, ...summaryFields } : c,
             )
           : [
               ...currentState.conversations,
@@ -690,6 +697,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
                 messages,
                 pinned: false,
                 tags: [],
+                ...summaryFields,
                 createdAt: new Date(),
                 updatedAt: new Date(),
               },

@@ -2,7 +2,6 @@
 
 import { useMemo } from "react";
 import { useChatWidth } from "#components/chat-width-provider";
-import { cn } from "#lib/utils";
 import { selectSelectedConversation, useChatStore } from "#store/chat";
 import { ChatHeader } from "./chat-header";
 import { EmptyState } from "./empty-state";
@@ -41,14 +40,7 @@ export function ChatArea() {
         onTagsChange={(tags) => setConversationTags(selectedConversation.id, tags)}
         onTogglePin={() => togglePin(selectedConversation.id)}
       />
-      <div
-        className={cn(
-          "min-h-0 flex-1 flex flex-col w-full px-4 pb-8",
-          fixedWidth && "max-w-[896px] mx-auto",
-        )}
-      >
-        <MessageList conversation={selectedConversation} />
-      </div>
+      <MessageList conversation={selectedConversation} fixedWidth={fixedWidth} />
       <MessageInput key={selectedConversation.id} />
     </div>
   );
