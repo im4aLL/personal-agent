@@ -4,12 +4,12 @@
 
 **Blocked by:** #24 - Auto-compaction above the context threshold.
 
-**Status:** Not started
+**Status:** Done
 
 ## Tasks
 
-- [ ] Button next to `ContextUsageIndicator` in `message-input.tsx`
-- [ ] Runs the same compaction path as auto-compact but ignores `shouldCompact` - always regenerates and persists a fresh summary when clicked
+- [x] Button next to `ContextUsageIndicator` in `message-input.tsx`
+- [x] Runs the same compaction path as auto-compact but ignores `shouldCompact` - always regenerates and persists a fresh summary when clicked
 
 ### Verify
 
