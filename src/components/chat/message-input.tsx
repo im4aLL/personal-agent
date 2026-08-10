@@ -9,6 +9,7 @@ import {
   ImageIcon,
   Loader2Icon,
   PaperclipIcon,
+  ShrinkIcon,
   SparklesIcon,
   SquareIcon,
   XIcon,
@@ -36,16 +37,18 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
 } from "#components/ui/dropdown-menu";
-import { Popover, PopoverContent, PopoverAnchor } from "#components/ui/popover";
+import { Popover, PopoverAnchor, PopoverContent } from "#components/ui/popover";
 import { Textarea } from "#components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "#components/ui/tooltip";
 import { systemPromptFromState, useChat } from "#hooks/use-chat";
 import {
   buildOutgoingContext,
   estimatePendingTokens,
   estimateTextTokens,
   estimateTokens,
-  getContextWindow,
+  resolveContextWindow,
 } from "#lib/context";
+import type { ModelInfo } from "#lib/providers";
 import type { Attachment, Message } from "#lib/types/chat";
 import { cn } from "#lib/utils";
 import { useAgentsStore } from "#store/agents";
@@ -318,7 +321,10 @@ function SlashCommandAutocomplete({
 }) {
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Scroll highlighted item into view
+  // Scroll highlighted item into view. highlightedIndex itself isn't read
+  // here - it's only the trigger for re-running after the DOM's
+  // data-highlighted attribute (set by rendering below) has moved.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: highlightedIndex is a deliberate re-run trigger, not read in the body
   useEffect(() => {
     if (!listRef.current) return;
     const highlighted = listRef.current.querySelector('[data-highlighted="true"]');
@@ -440,6 +446,7 @@ function ContextUsageIndicator({
   pendingAttachments,
   providerBaseUrl,
   modelId,
+  models,
   className,
 }: {
   messages: Message[];
@@ -450,6 +457,7 @@ function ContextUsageIndicator({
   pendingAttachments: Attachment[];
   providerBaseUrl: string;
   modelId: string;
+  models: ModelInfo[];
   className?: string;
 }) {
   // "Current" mirrors exactly what the next request would send: system
@@ -472,8 +480,8 @@ function ContextUsageIndicator({
     );
   }, [messages, summary, summarizedUpToId, systemPrompt, pendingText, pendingAttachments]);
   const contextWindow = useMemo(
-    () => getContextWindow(providerBaseUrl, modelId),
-    [providerBaseUrl, modelId],
+    () => resolveContextWindow(providerBaseUrl, modelId, models),
+    [providerBaseUrl, modelId, models],
   );
   const ratio = contextWindow > 0 ? tokens / contextWindow : 0;
 
@@ -506,7 +514,17 @@ export function MessageInput() {
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [slashOpen, setSlashOpen] = useState(false);
-  const { sendMessage, stop, isGenerating, canSend, isOffline, messages, systemPrompt } = useChat();
+  const {
+    sendMessage,
+    stop,
+    isGenerating,
+    canSend,
+    isOffline,
+    messages,
+    systemPrompt,
+    isCompacting,
+    compactNow,
+  } = useChat();
   const conversation = useChatStore(selectSelectedConversation);
   const { fixedWidth } = useChatWidth();
   const selectedModel = useChatStore((state) => state.selectedModel);
@@ -614,7 +632,7 @@ export function MessageInput() {
   // Slash command detection
   const slashQuery = useMemo(() => {
     const match = value.match(/^\/(\S*)$/);
-    return match ? match[1] ?? "" : null;
+    return match ? (match[1] ?? "") : null;
   }, [value]);
 
   // Show slash autocomplete when user types "/" at the start
@@ -628,12 +646,22 @@ export function MessageInput() {
 
     for (const skill of skills) {
       if (!slashQuery || skill.name.toLowerCase().includes(lowerQuery)) {
-        results.push({ kind: "skill", id: skill.id, name: skill.name, description: skill.description });
+        results.push({
+          kind: "skill",
+          id: skill.id,
+          name: skill.name,
+          description: skill.description,
+        });
       }
     }
     for (const agent of agents) {
       if (!slashQuery || agent.name.toLowerCase().includes(lowerQuery)) {
-        results.push({ kind: "agent", id: agent.id, name: agent.name, description: agent.description });
+        results.push({
+          kind: "agent",
+          id: agent.id,
+          name: agent.name,
+          description: agent.description,
+        });
       }
     }
     return results;
@@ -642,6 +670,7 @@ export function MessageInput() {
   const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   // Reset highlight when slash opens or items change
+  // biome-ignore lint/correctness/useExhaustiveDependencies: slashOpen is a deliberate re-run trigger, not read in the body
   useEffect(() => {
     setHighlightedIndex(0);
   }, [slashOpen]);
@@ -699,7 +728,7 @@ export function MessageInput() {
   function handleSend() {
     const trimmed = value.trim();
     const hasAttachments = attachments.length > 0;
-    if ((!trimmed && !hasAttachments) || isGenerating || !canSend) return;
+    if ((!trimmed && !hasAttachments) || isGenerating || isCompacting || !canSend) return;
     if (trimmed.length > MAX_MESSAGE_LENGTH) {
       toast.error("Message too long", {
         description: `Messages are limited to ${MAX_MESSAGE_LENGTH.toLocaleString()} characters.`,
@@ -951,7 +980,7 @@ export function MessageInput() {
                 type="button"
                 size="icon-sm"
                 aria-label="Send message"
-                disabled={(!value.trim() && !hasAttachments) || !canSend}
+                disabled={(!value.trim() && !hasAttachments) || !canSend || isCompacting}
                 onClick={handleSend}
               >
                 <ArrowUpIcon className="size-4" />
@@ -980,17 +1009,42 @@ export function MessageInput() {
           <ModelSelector />
           <ThinkingSelector />
           {activeProvider && (
-            <ContextUsageIndicator
-              className="ml-auto"
-              messages={messages}
-              summary={conversation?.summary}
-              summarizedUpToId={conversation?.summarizedUpToId}
-              systemPrompt={pendingSystemPrompt}
-              pendingText={effectivePendingText}
-              pendingAttachments={attachments}
-              providerBaseUrl={activeProvider.baseUrl}
-              modelId={selectedModel.modelId}
-            />
+            <div className="group/context-actions ml-auto flex items-center gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className={cn(
+                      "text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/context-actions:opacity-100",
+                      isCompacting && "opacity-100",
+                    )}
+                    aria-label="Compact context now"
+                    disabled={isCompacting || isGenerating || messages.length < 2}
+                    onClick={() => void compactNow()}
+                  >
+                    {isCompacting ? (
+                      <Loader2Icon className="size-3.5 animate-spin" />
+                    ) : (
+                      <ShrinkIcon className="size-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Compact context now</TooltipContent>
+              </Tooltip>
+              <ContextUsageIndicator
+                messages={messages}
+                summary={conversation?.summary}
+                summarizedUpToId={conversation?.summarizedUpToId}
+                systemPrompt={pendingSystemPrompt}
+                pendingText={effectivePendingText}
+                pendingAttachments={attachments}
+                providerBaseUrl={activeProvider.baseUrl}
+                models={activeProvider.models}
+                modelId={selectedModel.modelId}
+              />
+            </div>
           )}
         </div>
       </div>

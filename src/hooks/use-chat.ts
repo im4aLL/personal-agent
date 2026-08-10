@@ -17,8 +17,8 @@ import {
   buildOutgoingContext,
   estimateTextTokens,
   estimateTokens,
-  getContextWindow,
   IMAGE_MIME_TYPES,
+  resolveContextWindow,
   shouldCompact,
 } from "#lib/context";
 import { generateConversationSummary, generateConversationTitle } from "#lib/title";
@@ -243,7 +243,9 @@ export function useChat() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
+  const [isCompacting, setIsCompacting] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const compactAbortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     function handleOnline() {
@@ -298,7 +300,11 @@ export function useChat() {
           .join("\n\n")
       : (systemPrompt ?? "");
     const tokens = estimateTokens(outgoing.messages) + estimateTextTokens(combinedSystemPrompt);
-    const window = getContextWindow(activeProvider.baseUrl, selectedModel.modelId);
+    const window = resolveContextWindow(
+      activeProvider.baseUrl,
+      selectedModel.modelId,
+      activeProvider.models,
+    );
 
     // eslint-disable-next-line no-console
     console.log(
@@ -315,6 +321,92 @@ export function useChat() {
   const stop = useCallback(() => {
     abortControllerRef.current?.abort();
   }, []);
+
+  // Shared by auto-compact (streamAssistantResponse) and the manual compact
+  // button (compactNow): generates a fresh summary over everything but the
+  // raw tail, then persists it. Callers decide whether/when to invoke it.
+  const runCompaction = useCallback(
+    async (
+      conversationId: string,
+      contextMessages: Message[],
+      signal: AbortSignal,
+    ): Promise<{ summaryText: string; cutoffId: string } | null> => {
+      if (!activeProvider) {
+        return null;
+      }
+
+      const rawTailSize = compactionTailSize(contextMessages.length);
+      if (rawTailSize <= 0) {
+        return null;
+      }
+
+      const toSummarize = contextMessages.slice(0, contextMessages.length - rawTailSize);
+      const cutoffId = toSummarize[toSummarize.length - 1]?.id;
+      if (!cutoffId) {
+        return null;
+      }
+
+      const summaryText = await generateConversationSummary(
+        toSummarize,
+        activeProvider,
+        selectedModel.modelId,
+        signal,
+      );
+
+      setConversationSummary(conversationId, summaryText, cutoffId);
+      persistConversation(conversationId);
+
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[personal-agent] compacted context: summarized ${toSummarize.length} messages, kept ${rawTailSize} raw`,
+        );
+      }
+
+      return { summaryText, cutoffId };
+    },
+    [activeProvider, selectedModel, setConversationSummary, persistConversation],
+  );
+
+  const compactNow = useCallback(async () => {
+    if (!conversation || !activeProvider) {
+      return;
+    }
+
+    const contextMessages = conversation.messages;
+    if (compactionTailSize(contextMessages.length) <= 0) {
+      toast.error("Not enough messages to compact");
+      return;
+    }
+
+    compactAbortControllerRef.current = new AbortController();
+    setIsCompacting(true);
+    const toastId = toast.loading("Compacting context...");
+
+    try {
+      const result = await runCompaction(
+        conversation.id,
+        contextMessages,
+        compactAbortControllerRef.current.signal,
+      );
+
+      if (result) {
+        toast.success("Context compacted");
+      }
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        if (import.meta.env.DEV) {
+          // eslint-disable-next-line no-console
+          console.error("[personal-agent] manual compaction failed", error);
+        }
+        toast.error("Failed to compact context");
+      }
+    } finally {
+      toast.dismiss(toastId);
+      setIsCompacting(false);
+      compactAbortControllerRef.current = null;
+    }
+  }, [conversation, activeProvider, runCompaction]);
 
   const streamAssistantResponse = useCallback(
     async (conversationId: string, contextMessages: Message[], systemPrompt?: string) => {
@@ -356,59 +448,50 @@ export function useChat() {
 
       if (!hasValidSummary && rawTailSize > 0) {
         const tokens = estimateTokens(contextMessages) + estimateTextTokens(systemPrompt ?? "");
-        const contextWindow = getContextWindow(activeProvider.baseUrl, selectedModel.modelId);
+        const contextWindow = resolveContextWindow(
+          activeProvider.baseUrl,
+          selectedModel.modelId,
+          activeProvider.models,
+        );
 
         if (shouldCompact(tokens, contextWindow)) {
-          const toSummarize = contextMessages.slice(0, contextMessages.length - rawTailSize);
-          const cutoffId = toSummarize[toSummarize.length - 1]?.id;
+          const toastId = toast.loading("Compacting context...");
 
-          if (cutoffId) {
-            const toastId = toast.loading("Compacting context...");
+          try {
+            const result = await runCompaction(conversationId, contextMessages, compactionSignal);
 
-            try {
-              const summaryText = await generateConversationSummary(
-                toSummarize,
-                activeProvider,
-                selectedModel.modelId,
-                compactionSignal,
-              );
-
-              setConversationSummary(conversationId, summaryText, cutoffId);
-              persistConversation(conversationId);
+            if (result) {
               outgoing = buildOutgoingContext(contextMessages, {
-                summary: summaryText,
-                summarizedUpToId: cutoffId,
+                summary: result.summaryText,
+                summarizedUpToId: result.cutoffId,
               });
-
-              if (import.meta.env.DEV) {
-                // eslint-disable-next-line no-console
-                console.log(
-                  `[personal-agent] compacted context: summarized ${toSummarize.length} messages, kept ${rawTailSize} raw`,
-                );
-              }
-            } catch (error) {
-              if (error instanceof DOMException && error.name === "AbortError") {
-                setIsGenerating(false);
-                abortControllerRef.current = null;
-                return;
-              }
-
-              compactionFailed = true;
-
-              if (import.meta.env.DEV) {
-                // eslint-disable-next-line no-console
-                console.error("[personal-agent] compaction failed", error);
-              }
-            } finally {
-              toast.dismiss(toastId);
             }
+          } catch (error) {
+            if (error instanceof DOMException && error.name === "AbortError") {
+              setIsGenerating(false);
+              abortControllerRef.current = null;
+              return;
+            }
+
+            compactionFailed = true;
+
+            if (import.meta.env.DEV) {
+              // eslint-disable-next-line no-console
+              console.error("[personal-agent] compaction failed", error);
+            }
+          } finally {
+            toast.dismiss(toastId);
           }
         }
       }
 
       if (compactionFailed && outgoing.summaryText === null) {
         const tokens = estimateTokens(contextMessages) + estimateTextTokens(systemPrompt ?? "");
-        const contextWindow = getContextWindow(activeProvider.baseUrl, selectedModel.modelId);
+        const contextWindow = resolveContextWindow(
+          activeProvider.baseUrl,
+          selectedModel.modelId,
+          activeProvider.models,
+        );
 
         if (shouldCompact(tokens, contextWindow)) {
           toast.error("Conversation too long to send", {
@@ -594,14 +677,14 @@ export function useChat() {
       setMessageStatus,
       setMessageError,
       setConversationTitle,
-      setConversationSummary,
       persistConversation,
+      runCompaction,
     ],
   );
 
   const sendMessage = useCallback(
     async (content: string, attachments?: Attachment[]) => {
-      if (!activeProvider) {
+      if (!activeProvider || isCompacting) {
         return;
       }
 
@@ -685,11 +768,11 @@ export function useChat() {
         useAgentsStore.getState().deactivateAgent();
       }
     },
-    [activeProvider, addMessage, streamAssistantResponse, systemPrompt],
+    [activeProvider, isCompacting, addMessage, streamAssistantResponse],
   );
 
   const regenerate = useCallback(async () => {
-    if (!conversation || !activeProvider) {
+    if (!conversation || !activeProvider || isCompacting) {
       return;
     }
 
@@ -713,11 +796,18 @@ export function useChat() {
       currentConversation.messages,
       systemPrompt,
     );
-  }, [conversation, activeProvider, regenerateMessage, streamAssistantResponse, systemPrompt]);
+  }, [
+    conversation,
+    activeProvider,
+    isCompacting,
+    regenerateMessage,
+    streamAssistantResponse,
+    systemPrompt,
+  ]);
 
   const editMessage = useCallback(
     async (messageId: string, content: string) => {
-      if (!conversation || !activeProvider) {
+      if (!conversation || !activeProvider || isCompacting) {
         return;
       }
 
@@ -742,7 +832,14 @@ export function useChat() {
         systemPrompt,
       );
     },
-    [conversation, activeProvider, editMessageInStore, streamAssistantResponse, systemPrompt],
+    [
+      conversation,
+      activeProvider,
+      isCompacting,
+      editMessageInStore,
+      streamAssistantResponse,
+      systemPrompt,
+    ],
   );
 
   const retry = useCallback(() => {
@@ -791,11 +888,13 @@ export function useChat() {
     systemPrompt,
     isGenerating,
     isOffline,
+    isCompacting,
     canSend,
     sendMessage,
     stop,
     retry,
     regenerate,
     editMessage,
+    compactNow,
   };
 }
