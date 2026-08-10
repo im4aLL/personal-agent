@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0
+
+### Features
+- Add PDF attachment text extraction so PDF attachments are sent to models as extracted text (`35280dd`)
+- Give the chat area more room and adjust the native menu; fix provider list sync (`00a8852`)
+
 ## 1.3.0
 
 ### Features
