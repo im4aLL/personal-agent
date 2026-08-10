@@ -1,4 +1,4 @@
-import type { Message } from "#lib/types/chat";
+import type { Attachment, Message } from "#lib/types/chat";
 
 // Providers are matched by base URL, not providerId/label: providerId is
 // generated from a user-editable label (see createProviderId in
@@ -102,9 +102,9 @@ export const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/
 const CHARS_PER_TOKEN = 4;
 const TOKENS_PER_IMAGE = 1000;
 
-function countQualifyingImages(message: Message): number {
+function countQualifyingImages(attachments: Attachment[] | undefined): number {
   return (
-    message.attachments?.filter(
+    attachments?.filter(
       (attachment) => attachment.data && IMAGE_MIME_TYPES.includes(attachment.type),
     ).length ?? 0
   );
@@ -123,7 +123,7 @@ const TOKEN_MEMO_LIMIT = 2000;
 const tokenMemo = new Map<string, TokenMemoEntry>();
 
 function estimateMessageTokens(message: Message): number {
-  const imageCount = countQualifyingImages(message);
+  const imageCount = countQualifyingImages(message.attachments);
   const cached = tokenMemo.get(message.id);
 
   if (
@@ -160,4 +160,24 @@ export function estimateTokens(messages: Message[]): number {
 
 export function shouldCompact(tokens: number, window: number): boolean {
   return tokens > 0.7 * window;
+}
+
+/**
+ * Characters/4 heuristic for plain text that isn't a `Message` - the system
+ * prompt and the in-progress draft in the input box. Shares the estimate
+ * with `estimateTokens` but is not memoized: both inputs already change on
+ * every keystroke, so a memo would never hit.
+ */
+export function estimateTextTokens(text: string): number {
+  return Math.ceil(text.length / CHARS_PER_TOKEN);
+}
+
+/**
+ * Same chars/4 + per-image estimate as `estimateTokens`, for a draft that
+ * hasn't become a `Message` yet - the input box's pending text and
+ * attachments. Kept in sync with `buildUserContent` (#hooks/use-chat) via
+ * the shared `IMAGE_MIME_TYPES` list.
+ */
+export function estimatePendingTokens(text: string, attachments: Attachment[] | undefined): number {
+  return estimateTextTokens(text) + countQualifyingImages(attachments) * TOKENS_PER_IMAGE;
 }
