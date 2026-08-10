@@ -100,6 +100,7 @@ export async function mergeAndApply(
 ): Promise<MergeResult> {
   const local = providerStorage.getAll();
   const remote = await pullProviders(key);
+  const deletedIds = new Set(providerStorage.getDeletedIds());
 
   const localMap = new Map(local.map((item) => [item.id, item]));
   const remoteMap = new Map(remote.map((item) => [item.id, item]));
@@ -116,6 +117,18 @@ export async function mergeAndApply(
   for (const id of allIds) {
     const localProvider = localMap.get(id);
     const remoteProvider = remoteMap.get(id);
+
+    if (deletedIds.has(id)) {
+      // Previously deleted by the user - never resurrect it, on either side.
+      if (remoteProvider) {
+        try {
+          await deleteRemoteProvider(id);
+        } catch {
+          // Best-effort: keep the tombstone and retry on the next sync.
+        }
+      }
+      continue;
+    }
 
     if (localProvider && !remoteProvider) {
       merged.push(localProvider);
@@ -169,6 +182,11 @@ export async function mergeAndApply(
       record.syncEnabled = false;
     }
   }
+
+  // Drop tombstones once a deleted provider is gone from both sides - no
+  // point remembering it forever.
+  const stillPresentIds = new Set([...merged.map((item) => item.id), ...remoteAfterIds]);
+  providerStorage.setDeletedIds([...deletedIds].filter((id) => stillPresentIds.has(id)));
 
   providerStorage.saveAll(merged);
   return { summary, applied: true };

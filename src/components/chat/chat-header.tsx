@@ -2,6 +2,7 @@
 
 import { PinIcon, PinOffIcon } from "lucide-react";
 import { Button } from "#components/ui/button";
+import { SidebarTrigger } from "#components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#components/ui/tooltip";
 import { TagEditor } from "./tag-editor";
 
@@ -23,7 +24,8 @@ export function ChatHeader({
   onTogglePin,
 }: ChatHeaderProps) {
   return (
-    <header className="flex items-center border-b px-4 py-3">
+    <header className="flex items-center gap-2 border-b px-4 py-3">
+      <SidebarTrigger />
       <h2 className="truncate text-sm font-semibold flex-1">{title}</h2>
       <div className="flex items-center gap-1">
         <Tooltip>

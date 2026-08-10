@@ -4,6 +4,7 @@ import type { ConnectionMode } from "#lib/providers";
 
 const PROVIDERS_STORAGE_KEY = "personal-agent:providers";
 const PROVIDER_SYNC_ENABLED_KEY = "personal-agent:provider-sync-enabled";
+const DELETED_PROVIDER_IDS_KEY = "personal-agent:deleted-provider-ids";
 
 export type ProviderModelRecord = {
   id: string;
@@ -202,6 +203,53 @@ export function getDefault(): ProviderRecord | null {
 export function setDefault(id: string): void {
   const records = getAll().map((item) => ({ ...item, isDefault: item.id === id }));
   writeRaw(records);
+}
+
+// Tracks provider ids the user has explicitly deleted, so a stale copy on
+// another client (or a copy left behind by a failed remote delete) can't
+// resurrect the provider on the next merge.
+export function getDeletedIds(): string[] {
+  if (!isBrowser()) {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(DELETED_PROVIDER_IDS_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function addDeletedId(id: string): void {
+  if (!isBrowser()) {
+    return;
+  }
+
+  try {
+    const ids = new Set(getDeletedIds());
+    ids.add(id);
+    window.localStorage.setItem(DELETED_PROVIDER_IDS_KEY, JSON.stringify([...ids]));
+  } catch {
+    // Ignore storage errors (e.g. private mode).
+  }
+}
+
+export function setDeletedIds(ids: string[]): void {
+  if (!isBrowser()) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(DELETED_PROVIDER_IDS_KEY, JSON.stringify(ids));
+  } catch {
+    // Ignore storage errors (e.g. private mode).
+  }
 }
 
 export function isProviderSyncEnabled(): boolean {

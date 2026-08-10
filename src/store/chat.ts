@@ -996,6 +996,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     set({ providers: nextProviders, selectedModel: nextSelectedModel });
     persistProviders(nextProviders);
+    providerStorage.addDeletedId(id);
 
     void (async () => {
       try {
