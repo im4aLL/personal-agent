@@ -26,8 +26,8 @@ export function ChatHeader({
   return (
     <header className="flex items-center gap-2 border-b px-4 py-3">
       <SidebarTrigger />
-      <h2 className="truncate text-sm font-semibold flex-1">{title}</h2>
-      <div className="flex items-center gap-1">
+      <h2 className="min-w-0 truncate text-sm font-semibold flex-1">{title}</h2>
+      <div className="flex shrink-0 items-center gap-1">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
