@@ -1,7 +1,7 @@
 "use client";
 
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
-import type { ImagePart, TextPart, UserContent } from "@ai-sdk/provider-utils";
+import type { FilePart, TextPart, UserContent } from "@ai-sdk/provider-utils";
 import { APICallError, stepCountIs, streamText, type Tool } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -132,11 +132,11 @@ function buildUserContent(message: Message): UserContent {
     return message.content;
   }
 
-  const parts: Array<TextPart | ImagePart> = [];
+  const parts: Array<TextPart | FilePart> = [];
 
   for (const attachment of imageAttachments) {
     if (attachment.data) {
-      parts.push({ type: "image", image: attachment.data });
+      parts.push({ type: "file", mediaType: attachment.type, data: attachment.data });
     }
   }
 
@@ -549,7 +549,7 @@ export function useChat() {
           const tools = isGeminiProvider(activeProvider.baseUrl) ? {} : buildEnabledTools();
           const hasTools = Object.keys(tools).length > 0;
 
-          const { fullStream } = streamText({
+          const { stream } = streamText({
             model,
             messages,
             ...(combinedSystemPrompt ? { system: combinedSystemPrompt } : {}),
@@ -559,7 +559,7 @@ export function useChat() {
               thinkingLevel !== "off" ? (THINKING_TO_REASONING[thinkingLevel] ?? "medium") : "none",
           });
 
-          for await (const part of fullStream) {
+          for await (const part of stream) {
             if (part.type === "text-delta") {
               appendMessageContent(conversationId, assistantMessage.id, part.text);
             } else if (part.type === "reasoning-delta") {

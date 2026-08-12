@@ -14,7 +14,7 @@ export function createFetchUrlTool() {
       "Also use this after a search tool (webSearch, googleSearch, duckduckgoSearch) " +
       "returns result URLs, to read the full content of a promising result.",
     inputSchema: z.object({
-      url: z.string().url().describe("The absolute URL to fetch, including https://"),
+      url: z.url().describe("The absolute URL to fetch, including https://"),
     }),
     execute: async ({ url }) => {
       let response: { status: number; body: string };
