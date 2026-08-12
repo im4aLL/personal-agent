@@ -121,7 +121,7 @@ export function MessageBubble({
 
       <div
         className={cn(
-          "group/message flex max-w-[85%] flex-col gap-1",
+          "group/message flex min-w-0 max-w-[85%] flex-col gap-1",
           isUser ? "items-end" : "items-start",
         )}
       >
@@ -150,9 +150,9 @@ export function MessageBubble({
           <>
             <div
               className={cn(
-                "relative rounded-2xl px-4 py-3 cursor-text select-text",
+                "relative min-w-0 max-w-full rounded-2xl px-4 py-3 cursor-text select-text",
                 isUser
-                  ? "bg-primary text-primary-foreground rounded-br-sm dark:bg-secondary-foreground/15 dark:text-secondary-foreground"
+                  ? "bg-primary text-primary-foreground rounded-br-sm dark:bg-secondary-foreground/10 dark:text-secondary-foreground"
                   : "bg-secondary text-secondary-foreground rounded-bl-sm",
                 isError && "border border-destructive/50 bg-destructive/10",
               )}

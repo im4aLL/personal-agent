@@ -70,7 +70,7 @@ export function MessageList({ conversation, fixedWidth }: MessageListProps) {
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pb-8"
+      className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto px-4 pb-8"
     >
       <div className={cn("flex w-full flex-1 flex-col", fixedWidth && "max-w-[896px] mx-auto")}>
         {messages.map((message) => (

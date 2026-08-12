@@ -15,12 +15,22 @@ interface MarkdownProps {
   className?: string;
 }
 
+function nodeToText(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(nodeToText).join("");
+  if (typeof node === "object" && "props" in node) {
+    return nodeToText((node as { props?: { children?: ReactNode } }).props?.children);
+  }
+  return "";
+}
+
 function CodeBlock({ children, className }: { children: ReactNode; className?: string }) {
   const [copied, setCopied] = useState(false);
   const language = /language-(\w+)/.exec(className ?? "")?.[1];
 
   const handleCopy = async () => {
-    const text = typeof children === "string" ? children : "";
+    const text = nodeToText(children);
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
@@ -32,7 +42,7 @@ function CodeBlock({ children, className }: { children: ReactNode; className?: s
   };
 
   return (
-    <div className="relative group/code my-3 rounded-lg overflow-hidden bg-popover">
+    <div className="relative group/code my-3 max-w-full rounded-lg overflow-hidden bg-popover">
       <div className="flex items-center justify-between px-3 py-1.5 bg-muted/70">
         <span className="text-xs text-muted-foreground font-mono">{language ?? "text"}</span>
         <Button
@@ -45,14 +55,15 @@ function CodeBlock({ children, className }: { children: ReactNode; className?: s
           {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
         </Button>
       </div>
-      <pre className="overflow-x-auto p-4 text-sm bg-transparent not-prose">
+      <pre className="max-w-full overflow-x-auto p-4 text-sm bg-transparent not-prose">
         <code className={cn(className, "font-mono")}>{children}</code>
       </pre>
     </div>
   );
 }
 
-const FILE_EXTENSIONS = /\.(pdf|zip|gz|tar|xz|7z|rar|docx?|xlsx?|pptx?|epub|mp[34]|mov|avi|mkv|wav|flac)$/i;
+const FILE_EXTENSIONS =
+  /\.(pdf|zip|gz|tar|xz|7z|rar|docx?|xlsx?|pptx?|epub|mp[34]|mov|avi|mkv|wav|flac)$/i;
 
 function ImageWithDownload({ src, alt }: { src?: string; alt?: string }) {
   const handleDownload = async () => {
@@ -137,7 +148,9 @@ function CodeComponent({
   const language = /language-(\w+)/.exec(className ?? "")?.[1];
 
   if (inline || !language || language === "text") {
-    return <code className="rounded bg-muted px-1 py-0.5 text-[0.875em] font-mono">{children}</code>;
+    return (
+      <code className="rounded bg-muted px-1 py-0.5 text-[0.875em] font-mono">{children}</code>
+    );
   }
 
   return <CodeBlock className={className}>{children}</CodeBlock>;
@@ -147,7 +160,7 @@ export function Markdown({ children, className }: MarkdownProps) {
   return (
     <div
       className={cn(
-        "prose prose-sm dark:prose-invert max-w-none prose-headings:mt-5 prose-headings:mb-2",
+        "prose prose-sm dark:prose-invert max-w-none break-words prose-headings:mt-5 prose-headings:mb-2",
         className,
       )}
     >
