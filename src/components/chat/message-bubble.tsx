@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
+import { useShowMessageIcons } from "#components/show-message-icons-provider";
 import { Button } from "#components/ui/button";
 import { Textarea } from "#components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#components/ui/tooltip";
@@ -42,6 +43,7 @@ export function MessageBubble({
   const isUser = message.role === "user";
   const isStreaming = message.status === "streaming";
   const isError = message.status === "error";
+  const { showMessageIcons } = useShowMessageIcons();
 
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -113,7 +115,7 @@ export function MessageBubble({
 
   return (
     <div className={cn("flex gap-3 py-4", isUser ? "justify-end" : "justify-start")}>
-      {!isUser && (
+      {!isUser && showMessageIcons && (
         <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-md bg-secondary text-secondary-foreground">
           <BotIcon className="size-4" />
         </div>
@@ -316,7 +318,7 @@ export function MessageBubble({
         )}
       </div>
 
-      {isUser && (
+      {isUser && showMessageIcons && (
         <div className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground dark:bg-secondary-foreground/15 dark:text-secondary-foreground">
           <UserIcon className="size-4" />
         </div>

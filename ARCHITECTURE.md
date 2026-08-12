@@ -178,6 +178,7 @@ Details:
 - Before the request is sent, `buildOutgoingContext` (lib/context.ts) collapses history into `[persisted summary] + [raw tail]` when a summary exists and its cutoff message is still present; otherwise it sends full history. If estimated tokens exceed 70% of the resolved context window and no valid summary covers the history, auto-compaction runs first (see section 9) before the real request goes out.
 - Non-Gemini providers get `tools: { fetchUrl, webSearch?, googleSearch?, duckduckgoSearch? }` (built by `buildEnabledTools`, gated on stored API keys/toggles) with `stopWhen: stepCountIs(8)`, so the model can call tools mid-stream and receive results back in the same `streamText` run.
 - Conversation and messages are persisted after stream completion (or retry after transient errors with up to 2 retries).
+- Attachments are flattened into the user message before sending (`buildUserContent`): images become data-URL image parts, PDFs are text-extracted through Rust (`extract_pdf_text`) and sent as text, and every other supported text file is read as text - so non-image attachments travel as plain text parts rather than binary.
 - Editing or regenerating a message inside the already-summarized region invalidates the persisted summary (`isSummaryInvalidatedBy`, store/chat-helpers.ts) so a stale summary is never sent alongside changed history.
 
 ## 5. Persistence flow (frontend -> Turso)
@@ -212,6 +213,7 @@ flowchart LR
 Data mapping:
 
 - `turso.ts` serializes JS values to wire types (`text` / `integer` / `real` / `null`) and maps rows back with `parseValue`.
+- Provider deletion is tombstoned: `providerStorage` keeps a `deleted-provider-ids` list in localStorage, and `providerSync.mergeAndApply` skips any id in that list (deleting a stale remote copy if one resurfaces) so a provider the user deleted is never resurrected by a later sync. Tombstones are dropped once the provider is gone from both sides.
 - `runMigrations()` (turso-repository.ts) versions the schema through the `schema_meta` table (currently version 6; v6 added `conversations.summary` and `summarized_up_to_id` for persisted context-compaction summaries).
 - Tables: `conversations` (incl. `summary`, `summarized_up_to_id`), `messages`, `user_instructions`, `skills`, `custom_agents`, `provider_configs`, `schema_meta`.
 - SQL is written by hand with `?` placeholders; there is no ORM.
@@ -222,12 +224,13 @@ Data mapping:
 ```mermaid
 flowchart LR
     subgraph Rust["src-tauri/src"]
-        LIB[lib.rs: run + invoke_handler]
+        LIB[lib.rs: run + invoke_handler + native menu]
         PROXY[proxy.rs: proxy, proxy_stream, abort_stream, proxy_bytes]
         STATE[StreamState: abort-id -> oneshot sender]
         GS[google_search.rs]
         DDG[duckduckgo_search.rs]
         SW[search_window.rs: shared webview-window helpers]
+        PDF[pdf_text.rs: extract_pdf_text]
     end
 
     subgraph Plugins["Tauri plugins"]
@@ -243,6 +246,7 @@ flowchart LR
     LIB --> P2
     GS --> SW
     DDG --> SW
+    PDF -->|pdf-extract crate| PDFTXT[PDF file -> extracted text]
     PROXY -->|Channel<StreamChunk>| FRONT[Frontend Channel API]
     SW -->|scripted WebviewWindow + eval polling| ENGINE[Google / DuckDuckGo results page]
 ```
@@ -257,9 +261,12 @@ Registered commands (lib.rs):
 | `proxy_bytes` | Binary proxy returning base64 (used for file downloads) |
 | `google_search` / `collect_google_results` | Opens a scripted Google results webview and scrapes results |
 | `duckduckgo_search` / `collect_duckduckgo_results` | Same pattern against DuckDuckGo |
+| `extract_pdf_text` | Extracts text from a PDF attachment's bytes (via the `pdf-extract` crate, capped at 20 MB, wrapped in `catch_unwind` for malformed files) |
 | `write_file` | Writes bytes to a path chosen via the save dialog |
 
 Rust holds no application state beyond `StreamState` (a map of abort IDs to oneshot senders); all business logic lives in the frontend. `google_search`/`duckduckgo_search` are the exception: `search_window.rs` opens a real, visible `WebviewWindow` pointed at the engine's results page, injects a "Done" button via `initialization_script`, and polls (`eval_with_callback`, 500ms interval, 2 minute timeout) until the user clicks it and `window.__paResults` is populated - this is a human-in-the-loop scrape, not a headless request, because these engines block scripted/headless traffic.
+
+lib.rs also builds a native application menu in `.setup()` via `build_menu` (App / File / Edit / View / Window / Help submenus). The Help submenu adds "GitHub Repository" and "Report an Issue" items handled by `on_menu_event`, which opens the matching URL through `tauri-plugin-opener`. This native menu replaces the default OS-generated menu so platform-specific items (About, Hide, Quit on macOS) behave consistently.
 
 ## 7. Module and path conventions
 
@@ -327,7 +334,7 @@ Plans: `plans/context-compaction.md`, `plans/sidebar-optimization.md`. Tickets 2
 
 ```mermaid
 flowchart TD
-    EST[estimateTokens: chars/4 heuristic + per-image flat cost, memoized per message id] --> CHECK{shouldCompact: tokens > 70% of resolveContextWindow}
+    EST[estimateTokens: chars/4 heuristic + flat per-image cost, non-image attachments counted by text length, memoized per message id] --> CHECK{shouldCompact: tokens > 70% of resolveContextWindow}
     RESOLVE[resolveContextWindow: model's real contextWindow if known, else PROVIDER_WINDOW_RULES static table, else 256k default] --> CHECK
     CHECK -->|yes, and no valid summary| RUN[runCompaction: generateConversationSummary over history minus a raw tail]
     RUN --> PERSIST[setConversationSummary: summary + summarizedUpToId, written to conversations.summary/summarized_up_to_id]

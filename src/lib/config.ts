@@ -9,6 +9,7 @@ export const GOOGLE_SEARCH_ENABLED_KEY = "personal-agent:google-search-enabled";
 export const DUCKDUCKGO_SEARCH_ENABLED_KEY = "personal-agent:duckduckgo-search-enabled";
 export const TAVILY_API_KEY_KEY = "personal-agent:tavily-api-key";
 export const CHAT_FIXED_WIDTH_KEY = "personal-agent:chat-fixed-width";
+const SHOW_MESSAGE_ICONS_KEY = "personal-agent:show-message-icons";
 
 export type StoredModelSelection = {
   providerId: string;
@@ -274,4 +275,12 @@ export function loadChatFixedWidth(): boolean {
 
 export function saveChatFixedWidth(enabled: boolean): void {
   saveBooleanFlag(CHAT_FIXED_WIDTH_KEY, enabled);
+}
+
+export function loadShowMessageIcons(): boolean {
+  return loadBooleanFlag(SHOW_MESSAGE_ICONS_KEY, true);
+}
+
+export function saveShowMessageIcons(enabled: boolean): void {
+  saveBooleanFlag(SHOW_MESSAGE_ICONS_KEY, enabled);
 }

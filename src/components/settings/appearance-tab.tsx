@@ -2,8 +2,10 @@
 
 import { AlignCenterIcon, MonitorIcon, MoonIcon, StretchHorizontalIcon, SunIcon } from "lucide-react";
 import { useChatWidth } from "#components/chat-width-provider";
+import { useShowMessageIcons } from "#components/show-message-icons-provider";
 import { useTheme } from "#components/theme-provider";
 import { Button } from "#components/ui/button";
+import { Switch } from "#components/ui/switch";
 import { cn } from "#lib/utils";
 
 type ThemeOption = {
@@ -32,6 +34,7 @@ const CHAT_WIDTH_OPTIONS: ChatWidthOption[] = [
 export function AppearanceTab() {
   const { theme, setTheme } = useTheme();
   const { fixedWidth, setFixedWidth } = useChatWidth();
+  const { showMessageIcons, setShowMessageIcons } = useShowMessageIcons();
 
   return (
     <div className="space-y-6">
@@ -87,6 +90,16 @@ export function AppearanceTab() {
             </Button>
           ))}
         </div>
+      </div>
+
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h3 className="text-base font-medium">Message icons</h3>
+          <p className="text-sm text-muted-foreground">
+            Show user and agent icons next to message bubbles.
+          </p>
+        </div>
+        <Switch checked={showMessageIcons} onCheckedChange={setShowMessageIcons} />
       </div>
     </div>
   );

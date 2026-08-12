@@ -70,7 +70,7 @@ npm run tauri dev
 - Conversation search with debounced input
 - Virtualized message list for smooth scrolling in long conversations
 - Tagging and pinning for conversation organization
-- File attachments - images plus common text/code formats (`.txt`, `.md`, `.json`, `.csv`, `.ts`, `.py`-style extensions, etc.)
+- File attachments - images, PDFs (text is extracted and sent to the model), plus common text/code formats (`.txt`, `.md`, `.json`, `.csv`, `.ts`, `.py`-style extensions, etc.)
 - Keyboard shortcuts: Enter to send, Shift+Enter for newline, Esc to stop
 
 ### Context management
@@ -273,6 +273,7 @@ To back up your provider configuration without exposing API keys:
 | `src/lib/context.ts`                        | Token estimation, context window resolution, compaction  |
 | `src/lib/tools/`                            | AI SDK tool definitions: fetchUrl, webSearch, googleSearch, duckduckgoSearch |
 | `src-tauri/src/proxy.rs`                    | Tauri proxy and streaming backend                        |
+| `src-tauri/src/pdf_text.rs`                 | PDF attachment text extraction                           |
 | `src-tauri/src/search_window.rs`            | Scripted webview window for Google/DuckDuckGo scraping    |
 
 ## License
