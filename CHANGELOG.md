@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.5.0
+
+### Features
+- Add show/hide message icons toggle to appearance settings (`d7cbc20`)
+- Fix copy-to-clipboard for code blocks and fix code block overflow (`fc2e1e3`)
+- Fix chat header truncation and shrink button group (`612bf7d`)
+
+### Fixes
+- Fix Windows 1.4.0 build (`db28afd`)
+
 ## 1.4.0
 
 ### Features
