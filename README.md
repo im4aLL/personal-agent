@@ -323,6 +323,18 @@ sudo dnf remove personal-agent
 
 After installing deb/rpm, launch `Personal Agent` from your app menu.
 
+### Arch Linux / Manjaro
+
+```sh
+sudo install -m 755 "Personal Agent_x.y.z_amd64.AppImage" /usr/local/bin/personal-agent
+```
+
+`install -m 755` sets the executable bit, so no separate `chmod` is needed. Launch it from anywhere with `personal-agent`. Requires FUSE to run — install `fuse3` if you get a mount error:
+
+```sh
+sudo pacman -S fuse3
+```
+
 ## License
 
 MIT
