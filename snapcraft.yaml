@@ -42,7 +42,7 @@ parts:
   build-app:
     plugin: dump
     build-snaps:
-      - node/20/stable
+      - node/22/stable
     build-packages:
       - libwebkit2gtk-4.1-dev
       - build-essential
@@ -69,3 +69,23 @@ parts:
       dpkg -x src-tauri/target/release/bundle/deb/*.deb $SNAPCRAFT_PART_INSTALL/
       mv "$SNAPCRAFT_PART_INSTALL/usr/share/applications/Personal Agent.desktop" "$SNAPCRAFT_PART_INSTALL/usr/share/applications/personal-agent.desktop"
       sed -i -e "s|Icon=personal-agent|Icon=/usr/share/icons/hicolor/32x32/apps/personal-agent.png|g" $SNAPCRAFT_PART_INSTALL/usr/share/applications/personal-agent.desktop
+      # Let the GNOME extension provide the matching GLVND/Mesa stack. The
+      # WebKitGTK deb dependencies pull older GL loader libraries into the app
+      # snap, which mismatch the GNOME runtime DRI drivers at launch and crash
+      # with "libEGL fatal: did not find extension DRI_Mesa version 1".
+      lib_dir="$SNAPCRAFT_PART_INSTALL/usr/lib/$SNAPCRAFT_ARCH_TRIPLET"
+      rm -f \
+        "$lib_dir"/libEGL.so* \
+        "$lib_dir"/libEGL_mesa.so* \
+        "$lib_dir"/libGL.so* \
+        "$lib_dir"/libGLESv2.so* \
+        "$lib_dir"/libGLX.so* \
+        "$lib_dir"/libGLX_mesa.so* \
+        "$lib_dir"/libGLdispatch.so* \
+        "$lib_dir"/libOpenGL.so* \
+        "$lib_dir"/libgbm.so* \
+        "$lib_dir"/libdrm_amdgpu.so* \
+        "$lib_dir"/libdrm_intel.so* \
+        "$lib_dir"/libdrm_nouveau.so* \
+        "$lib_dir"/libdrm_radeon.so*
+      rm -rf "$lib_dir/dri"
