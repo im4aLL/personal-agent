@@ -68,4 +68,46 @@ Then run `npm run tauri build` directly.
 | `dlopen(): error loading libfuse.so.2` / `AppImages require FUSE to run` | `fuse2` is not installed | `sudo pacman -S fuse2`, or use `APPIMAGE_EXTRACT_AND_RUN=1` |
 | `failed to run linuxdeploy` with `unknown type [0x13] section .relr.dyn` | linuxdeploy's bundled `strip` is too old for RELR relocations | Use `NO_STRIP=1` |
 
+# Snap Store deployment
+
+Builds a `core22` (Ubuntu 22.04) strict-confinement snap from the `snapcraft.yaml`
+in the project root, following the [Tauri snapcraft guide](https://v2.tauri.app/distribute/snapcraft/).
+
+## Prerequisites
+
+- `snap`, `core22`, and `snapcraft` (all three) installed: `sudo snap install core22 snapcraft --classic`
+- The user must be in the `lxd` group so snapcraft can build without sudo: `sudo usermod -aG lxd $USER` (re-login afterwards)
+- An [UbuntuOne](https://login.ubuntu.com) account and the snap name `personal-agent` registered on [snapcraft.io](https://snapcraft.io): `snapcraft register personal-agent`
+
+## Build
+
+```sh
+snapcraft
+```
+
+Output is `personal-agent_1.5.0_amd64.snap` in the project root. The built `.snap`
+is gitignored.
+
+Notes:
+
+- The build installs Rust via `rustup-init` inside `override-build` instead of the
+  `rustup` classic snap, because the classic snap fails to install inside the LXD
+  build container.
+- The webkit2gtk-4.1 packages are pulled from the `snappi-dev/snapcraft-daily` PPA
+  declared under `package-repositories` (core22's archive only ships webkit2gtk-4.0).
+
+## Test locally
+
+```sh
+sudo snap install --dangerous personal-agent_1.5.0_amd64.snap
+snap run personal-agent
+```
+
+## Release
+
+```sh
+snapcraft login          # Login with your UbuntuOne credentials
+snapcraft upload --release=stable personal-agent_1.5.0_amd64.snap
+```
+
 Note: disabling strip (`NO_STRIP=1`) produces a larger AppImage (~98 MB vs ~70 MB). This is expected.

@@ -1,0 +1,71 @@
+name: personal-agent
+base: core22
+version: '1.5.0'
+title: Personal Agent
+summary: Local-first AI chat desktop app with custom instructions, skills, and agents.
+license: MIT
+contact: https://github.com/im4aLL/personal-agent/issues
+website: https://github.com/im4aLL/personal-agent
+issues: https://github.com/im4aLL/personal-agent/issues
+source-code: https://github.com/im4aLL/personal-agent
+description: |
+  Personal Agent is a local-first AI chat desktop app that works with any
+  OpenAI-compatible provider. Define custom instructions to control response
+  formatting, create reusable skills for domain-specific knowledge, and build
+  custom agents for different workflows. All conversations synced across
+  devices via Turso.
+
+grade: stable
+confinement: strict
+
+layout:
+  /usr/lib/$SNAPCRAFT_ARCH_TRIPLET/webkit2gtk-4.1:
+    bind: $SNAP/usr/lib/$SNAPCRAFT_ARCH_TRIPLET/webkit2gtk-4.1
+
+apps:
+  personal-agent:
+    command: usr/bin/personal-agent
+    desktop: usr/share/applications/personal-agent.desktop
+    extensions: [gnome]
+    plugs:
+      - network
+      - home
+
+package-repositories:
+  - type: apt
+    components: [main]
+    suites: [noble]
+    key-id: 78E1918602959B9C59103100F1831DDAFC42E99D
+    url: http://ppa.launchpad.net/snappy-dev/snapcraft-daily/ubuntu
+
+parts:
+  build-app:
+    plugin: dump
+    build-snaps:
+      - node/20/stable
+    build-packages:
+      - libwebkit2gtk-4.1-dev
+      - build-essential
+      - curl
+      - wget
+      - file
+      - libxdo-dev
+      - libssl-dev
+      - libayatana-appindicator3-dev
+      - librsvg2-dev
+      - dpkg
+    stage-packages:
+      - libwebkit2gtk-4.1-0
+      - libayatana-appindicator3-1
+    source: .
+    override-build: |
+      set -eu
+      export RUSTUP_HOME="$SNAPCRAFT_PART_BUILD/.rustup"
+      export CARGO_HOME="$SNAPCRAFT_PART_BUILD/.cargo"
+      curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal
+      export PATH="$CARGO_HOME/bin:$PATH"
+      npm install
+      npm run tauri build -- --bundles deb
+      dpkg -x src-tauri/target/release/bundle/deb/*.deb $SNAPCRAFT_PART_INSTALL/
+      mv "$SNAPCRAFT_PART_INSTALL/usr/share/applications/Personal Agent.desktop" "$SNAPCRAFT_PART_INSTALL/usr/share/applications/personal-agent.desktop"
+      sed -i -e "s|Icon=personal-agent|Icon=/usr/share/icons/hicolor/32x32/apps/personal-agent.png|g" $SNAPCRAFT_PART_INSTALL/usr/share/applications/personal-agent.desktop
