@@ -276,6 +276,53 @@ To back up your provider configuration without exposing API keys:
 | `src-tauri/src/pdf_text.rs`                 | PDF attachment text extraction                           |
 | `src-tauri/src/search_window.rs`            | Scripted webview window for Google/DuckDuckGo scraping    |
 
+## Install on Linux
+
+Releases ship three package formats. Pick the one for your distro — only the package files are needed; the staging folders next to them are build artifacts and can be ignored.
+
+### AppImage (any distro, no install)
+
+```sh
+chmod +x "Personal Agent_x.y.z_amd64.AppImage"
+./"Personal Agent_x.y.z_amd64.AppImage"
+```
+
+- No installation or root required — just run it, or double-click in a file manager.
+- Optional: use [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) to integrate it into the app menu automatically.
+- Optional: move it to a permanent location, e.g. `~/.local/bin/` or `/opt/`.
+
+### .deb (Debian / Ubuntu / Mint / Pop!_OS / elementary OS)
+
+```sh
+sudo apt install ./Personal\ Agent_x.y.z_amd64.deb
+# or
+sudo dpkg -i ./Personal\ Agent_x.y.z_amd64.deb
+```
+
+Uninstall:
+
+```sh
+sudo apt remove personal-agent
+```
+
+### .rpm (Fedora / RHEL / CentOS / openSUSE)
+
+```sh
+sudo dnf install ./Personal\ Agent-x.y.z-1.x86_64.rpm
+# or on RHEL/CentOS
+sudo yum localinstall ./Personal\ Agent-x.y.z-1.x86_64.rpm
+# or on openSUSE
+sudo zypper install ./Personal\ Agent-x.y.z-1.x86_64.rpm
+```
+
+Uninstall:
+
+```sh
+sudo dnf remove personal-agent
+```
+
+After installing deb/rpm, launch `Personal Agent` from your app menu.
+
 ## License
 
 MIT
