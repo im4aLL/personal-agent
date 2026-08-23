@@ -2,7 +2,17 @@
 
 Personal Agent is a local-first desktop AI workspace that brings your conversations, AI providers, custom agents, skills, and instructions into one place. Connect to multiple cloud or local models, create reusable AI capabilities, and activate agents, skills, or instructions instantly using slash commands-all while keeping your conversations and data under your control.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of the app's architecture, component tree, and data flows.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a detailed breakdown of the app's architecture, component tree, and data flows. See [docs/SETUP.md](docs/SETUP.md) for step-by-step provider, web search, and database setup.
+
+## Table of Contents
+
+- [Why Personal Agent?](#why-personal-agent)
+- [Screenshots](#screenshots)
+- [Installation](#installation)
+- [Features](#features)
+- [Customization](#customization)
+- [Technology Stack](#technology-stack)
+- [License](#license)
 
 ## Why Personal Agent?
 
@@ -35,10 +45,80 @@ Personal Agent solves all of this:
 
 ## Installation
 
-Download the latest release for your platform from the [GitHub Releases](https://github.com/im4aLL/personal-agent/releases) page.
+Download the latest release for your platform from the [GitHub Releases](https://github.com/im4aLL/personal-agent/releases) page. Packages are provided for macOS, Windows, and Linux (AppImage, `.deb`, `.rpm`, and a native Arch `.pkg.tar.zst`).
 
-- **macOS** - `.dmg` installer
-- **Windows** - `.msi` installer
+### macOS
+
+Download the `.dmg` installer from the [releases page](https://github.com/im4aLL/personal-agent/releases), open it, and drag **Personal Agent** to your Applications folder.
+
+### Windows
+
+Download the `.msi` installer from the [releases page](https://github.com/im4aLL/personal-agent/releases) and run it.
+
+### Linux
+
+Pick the package for your distro — only the package file is needed; any staging folders next to it in the release are build artifacts and can be ignored.
+
+#### AppImage (any distro, no install)
+
+```sh
+chmod +x "Personal Agent_x.y.z_amd64.AppImage"
+./"Personal Agent_x.y.z_amd64.AppImage"
+```
+
+- No installation or root required — just run it, or double-click in a file manager.
+- Optional: use [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) to integrate it into the app menu automatically.
+- Optional: move it to a permanent location, e.g. `~/.local/bin/` or `/opt/`.
+
+#### .deb (Debian / Ubuntu / Mint / Pop!_OS / elementary OS)
+
+```sh
+sudo apt install ./Personal\ Agent_x.y.z_amd64.deb
+# or
+sudo dpkg -i ./Personal\ Agent_x.y.z_amd64.deb
+```
+
+Uninstall:
+
+```sh
+sudo apt remove personal-agent
+```
+
+#### .rpm (Fedora / RHEL / CentOS / openSUSE)
+
+```sh
+sudo dnf install ./Personal\ Agent-x.y.z-1.x86_64.rpm
+# or on RHEL/CentOS
+sudo yum localinstall ./Personal\ Agent-x.y.z-1.x86_64.rpm
+# or on openSUSE
+sudo zypper install ./Personal\ Agent-x.y.z-1.x86_64.rpm
+```
+
+Uninstall:
+
+```sh
+sudo dnf remove personal-agent
+```
+
+After installing deb/rpm, launch `Personal Agent` from your app menu.
+
+#### Arch Linux (`.pkg.tar.zst` / AUR)
+
+Each release ships a native Arch package. Download it from the [releases page](https://github.com/im4aLL/personal-agent/releases) and install with `pacman`:
+
+```sh
+sudo pacman -U personal-agent-x.y.z-1-x86_64.pkg.tar.zst
+```
+
+This registers the app so it can be tracked and removed like any other package. The package pulls in `webkit2gtk-4.1`, `libappindicator-gtk3`, `librsvg`, `gtk3`, and `openssl` as dependencies (install `libappindicator-gtk3` first if `pacman` reports it missing). Launch `Personal Agent` from your app menu, or run `personal-agent`.
+
+Uninstall:
+
+```sh
+sudo pacman -R personal-agent
+```
+
+> The project does not publish an official AUR package. To build the `.pkg.tar.zst` yourself, follow [AUR.md](AUR.md). A community-maintained AUR package, if one appears, would install with `yay -S personal-agent` (or your preferred AUR helper).
 
 ### Build from source
 
@@ -56,6 +136,12 @@ npm run tauri build
 npm install
 npm run tauri dev
 ```
+
+### Provider setup
+
+Personal Agent works with any OpenAI-compatible API. For step-by-step instructions to add Opencode Go, OpenAI, Ollama, LM Studio, DeepSeek, or a custom endpoint, see [docs/SETUP.md](docs/SETUP.md#provider-setup).
+
+> Want multi-device sync or web search? Those are covered in [docs/SETUP.md](docs/SETUP.md) too.
 
 ## Features
 
@@ -89,11 +175,15 @@ Opt-in per tool in Settings > Web Search - the model only calls a tool if you've
 - **Google / DuckDuckGo search window** - Opens a real, visible search window; you do the searching yourself (handles logins/captchas), then click "Done" to hand the results back to the model
 - Tools are disabled automatically for Gemini providers due to a known upstream issue with tool calls
 
+> Detailed tool and web search setup: see [docs/SETUP.md](docs/SETUP.md#web-search-setup).
+
 ### Customization
 
 - **Custom instructions** - Global rules that apply to every message you send. Define your preferred format, tone, and constraints once.
 - **Skills** - Reusable knowledge blocks you can activate per conversation (coding conventions, project guidelines, domain-specific rules).
 - **Custom agents** - Combine instructions and skills into named profiles. Switch agents when switching contexts.
+
+> How instructions, skills, and agents work together: see [docs/SETUP.md](docs/SETUP.md#custom-instructions-skills-and-agents).
 
 ### Data
 
@@ -110,131 +200,9 @@ Opt-in per tool in Settings > Web Search - the model only calls a tool if you've
 - Stream-drop retry with exponential backoff
 - Provider management with connection testing and model discovery
 
-## Provider Setup
+## Customization
 
-Personal Agent works with any OpenAI-compatible API. Choose a provider below or configure a custom endpoint.
-
-### Opencode Go
-
-Opencode Go provides zen-compatible models via the go router.
-
-1. Install and start [Opencode](https://opencode.ai)
-2. In Personal Agent Settings > Providers, click "Opencode Go" under Quick Add
-3. The base URL is pre-filled: `https://opencode.ai/zen/go/v1`
-4. Leave the API key blank (Opencode Go does not require one)
-5. Click "Test connection" to verify, then "Add provider"
-
-### OpenAI
-
-1. Get an API key from [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
-2. In Personal Agent Settings > Providers, click "OpenAI" under Quick Add
-3. The base URL is pre-filled: `https://api.openai.com/v1`
-4. Paste your API key (starts with `sk-`)
-5. Click "Test connection" to verify, then "Add provider"
-6. After adding, click the refresh icon to fetch available models
-
-### Ollama (local)
-
-Ollama runs models locally on your machine.
-
-1. Install [Ollama](https://ollama.com) and pull at least one model: `ollama pull llama3.2`
-2. In Personal Agent Settings > Providers, click "Ollama" under Quick Add
-3. The base URL is pre-filled: `http://localhost:11434/v1`
-4. Leave the API key blank (Ollama runs locally)
-5. Click "Test connection" to verify, then "Add provider"
-
-If the connection fails, make sure Ollama is running (`ollama serve`).
-
-### LM Studio (local)
-
-LM Studio runs models locally with an OpenAI-compatible server.
-
-1. Install [LM Studio](https://lmstudio.ai) and load a model
-2. Start the local server from the LM Studio UI (Developer tab)
-3. In Personal Agent Settings > Providers, click "LM Studio" under Quick Add
-4. The base URL is pre-filled: `http://localhost:1234/v1`
-5. Leave the API key blank
-6. Click "Test connection" to verify, then "Add provider"
-
-### DeepSeek
-
-1. Get an API key from [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys)
-2. In Personal Agent Settings > Providers, click "DeepSeek" under Quick Add
-3. The base URL is pre-filled: `https://api.deepseek.com/v1`
-4. Paste your API key
-5. Click "Test connection" to verify, then "Add provider"
-
-### Custom Provider
-
-Any service with an OpenAI-compatible `/v1/models` and `/v1/chat/completions` endpoint works.
-
-1. In Settings > Providers, click "Add provider"
-2. Enter a label (any name), the base URL including `/v1`, and your API key
-3. Optionally enter comma-separated model IDs if the provider does not expose a `/models` endpoint
-4. Choose connection mode:
-   - **Direct** - fetch from the browser (works for most providers)
-   - **Proxy** - route through the Tauri Rust backend (use for CORS-restricted endpoints)
-
-## Custom Instructions, Skills, and Agents
-
-These features form the core of Personal Agent's customization system. They are stored in your Turso database (or locally) and can be managed from Settings.
-
-### Custom Instructions
-
-Custom instructions are global rules injected as system prompts into every conversation. Use them to enforce formatting preferences, tone, or constraints.
-
-Examples:
-
-- "Never use emojis in responses."
-- "Always format code blocks with the language tag."
-- "Respond in plain English without marketing fluff."
-
-### Skills
-
-Skills are reusable blocks of domain knowledge or guidelines you can activate per conversation. They are injected into the system prompt only when you activate them.
-
-Examples:
-
-- A skill with your project's coding conventions
-- A skill with your preferred meeting note format
-- A skill with rules for writing commit messages
-
-### Custom Agents
-
-Custom agents combine a system prompt with a description. Activate an agent to switch the AI's persona and behavior for a specific workflow.
-
-Examples:
-
-- A "Code Reviewer" agent that focuses on security and performance
-- A "Technical Writer" agent that produces documentation in your preferred style
-- A "DevOps" agent that knows your infrastructure setup
-
-## Web Search Setup (optional)
-
-Each tool below is off by default and toggled independently in Settings > Web Search.
-
-1. **Web search** - Get a free API key from [Tavily](https://app.tavily.com/home), paste it into Settings > Web Search, click "Save", then enable the "Web search" switch.
-2. **URL fetching** - Enable the "URL fetching" switch to let the agent read the content of a URL it's given.
-3. **Google / DuckDuckGo search window** - Enable either switch to let the agent open a dedicated search window. You perform the search yourself (so logins/captchas aren't a problem) and click "Done - send results" when finished; the results are then handed back to the model.
-
-Tools are unavailable on Gemini-family providers regardless of these settings (see [ARCHITECTURE.md](ARCHITECTURE.md#10-agentic-tool-calling-web-search--fetch)).
-
-## Turso Database (optional)
-
-Connect to a [Turso](https://turso.tech) database for persistent conversation storage and multi-device sync.
-
-1. Create a database at [turso.tech](https://turso.tech)
-2. Get your database URL (`libsql://...`) and auth token
-3. In Settings > Data, enter the URL and token, then click "Test Connection"
-4. Once connected, conversations, agents, skills, and instructions are automatically persisted and synced across devices
-
-## Settings Export
-
-To back up your provider configuration without exposing API keys:
-
-1. Go to Settings > Providers
-2. Click "Export" at the bottom
-3. A JSON file downloads with provider labels, base URLs, and model lists (no API keys)
+Custom instructions, skills, and custom agents form the core of Personal Agent's customization system. They are stored in your Turso database (or locally) and can be managed from Settings. See [docs/SETUP.md](docs/SETUP.md#custom-instructions-skills-and-agents) for details and examples.
 
 ## Technology Stack
 
@@ -252,104 +220,6 @@ To back up your provider configuration without exposing API keys:
 | Database             | [Turso](https://turso.tech/) (libsql) for optional cloud sync; localStorage for provider config                  |
 | Linting & formatting | [Biome](https://biomejs.dev/)                                                                                    |
 | Routing              | [React Router v7](https://reactrouter.com/)                                                                      |
-
-## Architecture
-
-### Key files
-
-| Path                                        | Purpose                                                  |
-| ------------------------------------------- | -------------------------------------------------------- |
-| `src/hooks/use-chat.ts`                     | Core chat logic: send, stream, retry, edit, regenerate   |
-| `src/store/chat.ts`                         | Zustand store: conversations, providers, model selection |
-| `src/store/agents.ts`                       | Zustand store: instructions, skills, custom agents       |
-| `src/lib/ai.ts`                             | AI SDK integration and Tauri proxy fetch                 |
-| `src/lib/providers.ts`                      | Provider model discovery and connection testing          |
-| `src/lib/agent-repository.ts`               | Agent/skill/instruction persistence layer                |
-| `src/components/chat/message-list.tsx`      | Virtualized message rendering                            |
-| `src/components/chat/message-input.tsx`     | Input with Enter/Shift+Enter/Esc handling                |
-| `src/components/settings/provider-form.tsx` | Provider add/edit form with validation                   |
-| `src/components/settings/agents-tab.tsx`    | Custom instructions, skills, and agents management       |
-| `src/components/settings/web-search-tab.tsx`| Web search / fetch / Google / DuckDuckGo tool toggles     |
-| `src/lib/context.ts`                        | Token estimation, context window resolution, compaction  |
-| `src/lib/tools/`                            | AI SDK tool definitions: fetchUrl, webSearch, googleSearch, duckduckgoSearch |
-| `src-tauri/src/proxy.rs`                    | Tauri proxy and streaming backend                        |
-| `src-tauri/src/pdf_text.rs`                 | PDF attachment text extraction                           |
-| `src-tauri/src/search_window.rs`            | Scripted webview window for Google/DuckDuckGo scraping    |
-
-## Install on Linux
-
-Releases ship three package formats. Pick the one for your distro — only the package files are needed; the staging folders next to them are build artifacts and can be ignored.
-
-### AppImage (any distro, no install)
-
-```sh
-chmod +x "Personal Agent_x.y.z_amd64.AppImage"
-./"Personal Agent_x.y.z_amd64.AppImage"
-```
-
-- No installation or root required — just run it, or double-click in a file manager.
-- Optional: use [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher) to integrate it into the app menu automatically.
-- Optional: move it to a permanent location, e.g. `~/.local/bin/` or `/opt/`.
-
-### .deb (Debian / Ubuntu / Mint / Pop!_OS / elementary OS)
-
-```sh
-sudo apt install ./Personal\ Agent_x.y.z_amd64.deb
-# or
-sudo dpkg -i ./Personal\ Agent_x.y.z_amd64.deb
-```
-
-Uninstall:
-
-```sh
-sudo apt remove personal-agent
-```
-
-### .rpm (Fedora / RHEL / CentOS / openSUSE)
-
-```sh
-sudo dnf install ./Personal\ Agent-x.y.z-1.x86_64.rpm
-# or on RHEL/CentOS
-sudo yum localinstall ./Personal\ Agent-x.y.z-1.x86_64.rpm
-# or on openSUSE
-sudo zypper install ./Personal\ Agent-x.y.z-1.x86_64.rpm
-```
-
-Uninstall:
-
-```sh
-sudo dnf remove personal-agent
-```
-
-After installing deb/rpm, launch `Personal Agent` from your app menu.
-
-### Arch Linux / Manjaro
-
-```sh
-sudo install -m 755 "Personal Agent_x.y.z_amd64.AppImage" /usr/local/bin/personal-agent
-```
-
-`install -m 755` sets the executable bit, so no separate `chmod` is needed. Launch it from anywhere with `personal-agent`. Requires FUSE to run — install `fuse3` if you get a mount error:
-
-```sh
-sudo pacman -S fuse3
-```
-
-#### Arch package (`.pkg.tar.zst`)
-
-Each release also ships a native Arch package. Download it and install with `pacman` — this registers the app so it can be tracked and removed like any other package:
-
-```sh
-sudo pacman -U personal-agent-x.y.z-1-x86_64.pkg.tar.zst
-```
-
-The package pulls in `webkit2gtk-4.1`, `libappindicator-gtk3`, `librsvg`, `gtk3`, and `openssl` as dependencies (install `libappindicator-gtk3` first if `pacman` reports it missing). Launch `Personal Agent` from your app menu, or run `personal-agent`.
-
-Uninstall:
-
-```sh
-sudo pacman -R personal-agent
-```
 
 ## License
 
