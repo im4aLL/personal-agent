@@ -335,6 +335,22 @@ sudo install -m 755 "Personal Agent_x.y.z_amd64.AppImage" /usr/local/bin/persona
 sudo pacman -S fuse3
 ```
 
+#### Arch package (`.pkg.tar.zst`)
+
+Each release also ships a native Arch package. Download it and install with `pacman` — this registers the app so it can be tracked and removed like any other package:
+
+```sh
+sudo pacman -U personal-agent-x.y.z-1-x86_64.pkg.tar.zst
+```
+
+The package pulls in `webkit2gtk-4.1`, `libappindicator-gtk3`, `librsvg`, `gtk3`, and `openssl` as dependencies (install `libappindicator-gtk3` first if `pacman` reports it missing). Launch `Personal Agent` from your app menu, or run `personal-agent`.
+
+Uninstall:
+
+```sh
+sudo pacman -R personal-agent
+```
+
 ## License
 
 MIT
