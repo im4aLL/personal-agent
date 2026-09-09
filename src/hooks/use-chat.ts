@@ -21,6 +21,7 @@ import {
   resolveContextWindow,
   shouldCompact,
 } from "#lib/context";
+import { buildOpencodeGoHeaders, shouldUseProxy } from "#lib/providers";
 import { generateConversationSummary, generateConversationTitle } from "#lib/title";
 import { createDuckDuckGoSearchTool } from "#lib/tools/duckduckgo-search";
 import { createFetchUrlTool } from "#lib/tools/fetch-url";
@@ -358,6 +359,7 @@ export function useChat() {
         activeProvider,
         selectedModel.modelId,
         signal,
+        conversationId,
       );
 
       setConversationSummary(conversationId, summaryText, cutoffId);
@@ -531,16 +533,20 @@ export function useChat() {
 
       let lastError: unknown = null;
 
+      // Opencode Go requires x-opencode-session and its CORS allowlist does
+      // not include that header, so always route Go through the Rust proxy.
+      const useProxy = shouldUseProxy(activeProvider);
+      const fetchImpl = useProxy ? proxyFetch : undefined;
+
       for (let attempt = 0; attempt <= MAX_STREAM_RETRIES; attempt++) {
         abortControllerRef.current = new AbortController();
 
         try {
-          const fetchImpl = activeProvider.connectionMode === "proxy" ? proxyFetch : undefined;
-
           const provider = createOpenAICompatible({
             name: activeProvider.name,
             baseURL: activeProvider.baseUrl,
             apiKey: activeProvider.apiKey,
+            headers: buildOpencodeGoHeaders(activeProvider.baseUrl, conversationId),
             fetch: fetchImpl,
           });
 
@@ -606,6 +612,7 @@ export function useChat() {
                   firstUserMessage,
                   titleProvider,
                   modelInfo.modelId,
+                  conversationId,
                 );
                 setConversationTitle(conversationId, title);
                 persistConversation(conversationId);
@@ -664,7 +671,7 @@ export function useChat() {
         toast.error("Failed to generate response", {
           description: isNetworkError
             ? "Network error. Check your connection or try again."
-            : activeProvider.connectionMode === "proxy"
+            : useProxy
               ? "Proxy request failed. The backend may be unreachable."
               : message,
         });

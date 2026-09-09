@@ -34,6 +34,47 @@ export type TestConnectionResult = {
   error?: string;
 };
 
+export const OPENCODE_SESSION_HEADER = "x-opencode-session";
+
+const APP_VERSION =
+  typeof __APP_VERSION__ === "string" && __APP_VERSION__ ? __APP_VERSION__ : "dev";
+
+export const PERSONAL_AGENT_USER_AGENT = `personal-agent/${APP_VERSION}`;
+
+// Go handling is URL-sniffed (opencode.ai/zen/go), not provider-typed, so custom-domain mirrors won't match.
+export function isOpencodeGo(baseUrl: string): boolean {
+  return baseUrl.toLowerCase().includes("opencode.ai/zen/go");
+}
+
+export function shouldUseProxy(provider: {
+  baseUrl: string;
+  connectionMode: ConnectionMode;
+}): boolean {
+  return provider.connectionMode === "proxy" || isOpencodeGo(provider.baseUrl);
+}
+
+export function buildOpencodeGoHeaders(
+  baseUrl: string,
+  conversationId: string,
+): Record<string, string> {
+  return buildRequestHeaders(baseUrl, conversationId);
+}
+
+export function buildRequestHeaders(
+  baseUrl: string,
+  conversationId?: string,
+): Record<string, string> {
+  const headers: Record<string, string> = {
+    "User-Agent": PERSONAL_AGENT_USER_AGENT,
+  };
+
+  if (conversationId && isOpencodeGo(baseUrl)) {
+    headers[OPENCODE_SESSION_HEADER] = conversationId;
+  }
+
+  return headers;
+}
+
 type ProxyRequest = {
   method: string;
   url: string;
@@ -48,9 +89,9 @@ type ProxyResponse = {
 
 export async function fetchProviderModels(endpoint: ProviderEndpoint): Promise<FetchModelsResult> {
   const url = buildModelsUrl(endpoint.baseUrl);
-  const headers = buildAuthHeaders(endpoint.apiKey);
+  const headers = buildAuthHeaders(endpoint.baseUrl, endpoint.apiKey);
 
-  if (endpoint.connectionMode === "proxy") {
+  if (shouldUseProxy(endpoint)) {
     const models = await fetchModelsViaProxy(url, headers);
     return { models, usedProxy: true };
   }
@@ -68,9 +109,9 @@ export async function testProviderConnection(
   endpoint: ProviderEndpoint,
 ): Promise<TestConnectionResult> {
   const url = buildModelsUrl(endpoint.baseUrl);
-  const headers = buildAuthHeaders(endpoint.apiKey);
+  const headers = buildAuthHeaders(endpoint.baseUrl, endpoint.apiKey);
 
-  if (endpoint.connectionMode === "proxy") {
+  if (shouldUseProxy(endpoint)) {
     const result = await testConnectionViaProxy(url, headers);
     return { ...result, usedProxy: true };
   }
@@ -89,14 +130,20 @@ function buildModelsUrl(baseUrl: string): string {
   return `${normalized}/models`;
 }
 
-function buildAuthHeaders(apiKey: string): Record<string, string> {
+function buildAuthHeaders(baseUrl: string, apiKey: string): Record<string, string> {
   const headers: Record<string, string> = {
     Accept: "application/json",
+    "User-Agent": PERSONAL_AGENT_USER_AGENT,
   };
 
   if (apiKey) {
     headers.Authorization = `Bearer ${apiKey}`;
   }
+
+  // /models is a plain GET with no conversation scope, so only the
+  // User-Agent (never x-opencode-session) goes along. baseUrl is unused
+  // beyond keeping the call sites explicit about which provider is queried.
+  void baseUrl;
 
   return headers;
 }

@@ -42,6 +42,22 @@ pub enum StreamChunk {
 #[derive(Default)]
 pub struct StreamState(pub Mutex<HashMap<String, oneshot::Sender<()>>>);
 
+fn user_agent() -> String {
+    format!("personal-agent/{}", env!("CARGO_PKG_VERSION"))
+}
+
+// Go handling is URL-sniffed (opencode.ai/zen/go), not provider-typed, so custom-domain mirrors won't match.
+// Note: User-Agent is sent for every provider, not just Go; x-opencode-session
+// is forwarded transparently whenever the frontend sets it.
+
+fn has_user_agent(headers: &HashMap<String, String>) -> bool {
+    headers.keys().any(|key| key.eq_ignore_ascii_case("user-agent"))
+}
+
+fn needs_user_agent(headers: &HashMap<String, String>) -> bool {
+    !has_user_agent(headers)
+}
+
 #[tauri::command]
 pub async fn proxy_bytes(request: ProxyRequest) -> Result<String, String> {
     let client = reqwest::Client::new();
@@ -50,7 +66,12 @@ pub async fn proxy_bytes(request: ProxyRequest) -> Result<String, String> {
         .parse::<reqwest::Method>()
         .map_err(|error| error.to_string())?;
 
+    let needs_ua = needs_user_agent(&request.headers);
     let mut builder = client.request(method, &request.url);
+
+    if needs_ua {
+        builder = builder.header("User-Agent", user_agent());
+    }
 
     for (key, value) in request.headers {
         builder = builder.header(key, value);
@@ -92,7 +113,12 @@ pub async fn proxy(request: ProxyRequest) -> Result<ProxyResponse, String> {
         .parse::<reqwest::Method>()
         .map_err(|error| error.to_string())?;
 
+    let needs_ua = needs_user_agent(&request.headers);
     let mut builder = client.request(method, &request.url);
+
+    if needs_ua {
+        builder = builder.header("User-Agent", user_agent());
+    }
 
     for (key, value) in request.headers {
         builder = builder.header(key, value);
@@ -121,7 +147,12 @@ pub async fn proxy_stream(
         .parse::<reqwest::Method>()
         .map_err(|error| error.to_string())?;
 
+    let needs_ua = needs_user_agent(&request.headers);
     let mut builder = client.request(method, &request.url);
+
+    if needs_ua {
+        builder = builder.header("User-Agent", user_agent());
+    }
 
     for (key, value) in request.headers {
         builder = builder.header(key, value);

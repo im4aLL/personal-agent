@@ -3,22 +3,29 @@ import { generateText } from "ai";
 import type { Message } from "#lib/types/chat";
 import type { ProviderInfo } from "#store/chat";
 import { proxyFetch } from "./ai";
+import { buildOpencodeGoHeaders, shouldUseProxy } from "./providers";
 
 const TITLE_PROMPT = `Summarize the user's first message into a very short, concise chat title (3-5 words). Respond with only the title text. Do not use quotes, punctuation, or explanations.`;
 
 const SUMMARY_PROMPT = `Summarize this conversation so far. Preserve names, decisions, and unresolved questions. Be concise but keep concrete details a later reply might depend on.`;
 
+function resolveFetchImpl(provider: ProviderInfo) {
+  return shouldUseProxy(provider) ? proxyFetch : undefined;
+}
+
 export async function generateConversationTitle(
   firstUserMessage: string,
   provider: ProviderInfo,
   modelId: string,
+  conversationId: string,
 ): Promise<string> {
-  const fetchImpl = provider.connectionMode === "proxy" ? proxyFetch : undefined;
+  const fetchImpl = resolveFetchImpl(provider);
 
   const aiProvider = createOpenAICompatible({
     name: provider.name,
     baseURL: provider.baseUrl,
     apiKey: provider.apiKey,
+    headers: buildOpencodeGoHeaders(provider.baseUrl, conversationId),
     fetch: fetchImpl,
   });
 
@@ -53,14 +60,16 @@ export async function generateConversationSummary(
   messages: Message[],
   provider: ProviderInfo,
   modelId: string,
-  abortSignal?: AbortSignal,
+  abortSignal: AbortSignal | undefined,
+  conversationId: string,
 ): Promise<string> {
-  const fetchImpl = provider.connectionMode === "proxy" ? proxyFetch : undefined;
+  const fetchImpl = resolveFetchImpl(provider);
 
   const aiProvider = createOpenAICompatible({
     name: provider.name,
     baseURL: provider.baseUrl,
     apiKey: provider.apiKey,
+    headers: buildOpencodeGoHeaders(provider.baseUrl, conversationId),
     fetch: fetchImpl,
   });
 
