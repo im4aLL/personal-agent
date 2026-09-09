@@ -8,6 +8,10 @@ export const FETCH_ENABLED_KEY = "personal-agent:fetch-enabled";
 export const GOOGLE_SEARCH_ENABLED_KEY = "personal-agent:google-search-enabled";
 export const DUCKDUCKGO_SEARCH_ENABLED_KEY = "personal-agent:duckduckgo-search-enabled";
 export const CREATE_PDF_ENABLED_KEY = "personal-agent:create-pdf-enabled";
+export const MEMORY_ENABLED_KEY = "personal-agent:memory-enabled";
+export const SHORT_TERM_MEMORY_ENABLED_KEY = "personal-agent:short-term-memory-enabled";
+export const LONG_TERM_MEMORY_ENABLED_KEY = "personal-agent:long-term-memory-enabled";
+export const MEMORY_TOKEN_CAP_KEY = "personal-agent:memory-token-cap";
 export const TAVILY_API_KEY_KEY = "personal-agent:tavily-api-key";
 export const CHAT_FIXED_WIDTH_KEY = "personal-agent:chat-fixed-width";
 const SHOW_MESSAGE_ICONS_KEY = "personal-agent:show-message-icons";
@@ -249,6 +253,65 @@ export function loadCreatePdfEnabled(): boolean {
 
 export function saveCreatePdfEnabled(enabled: boolean): void {
   saveBooleanFlag(CREATE_PDF_ENABLED_KEY, enabled);
+}
+
+export function loadMemoryEnabled(): boolean {
+  return loadBooleanFlag(MEMORY_ENABLED_KEY);
+}
+
+export function saveMemoryEnabled(enabled: boolean): void {
+  saveBooleanFlag(MEMORY_ENABLED_KEY, enabled);
+}
+
+export function loadShortTermMemoryEnabled(): boolean {
+  return loadBooleanFlag(SHORT_TERM_MEMORY_ENABLED_KEY, true);
+}
+
+export function saveShortTermMemoryEnabled(enabled: boolean): void {
+  saveBooleanFlag(SHORT_TERM_MEMORY_ENABLED_KEY, enabled);
+}
+
+export function loadLongTermMemoryEnabled(): boolean {
+  return loadBooleanFlag(LONG_TERM_MEMORY_ENABLED_KEY, true);
+}
+
+export function saveLongTermMemoryEnabled(enabled: boolean): void {
+  saveBooleanFlag(LONG_TERM_MEMORY_ENABLED_KEY, enabled);
+}
+
+export const DEFAULT_MEMORY_TOKEN_CAP = 500;
+export const MIN_MEMORY_TOKEN_CAP = 1;
+export const MAX_MEMORY_TOKEN_CAP = 2000;
+
+export function loadMemoryTokenCap(): number {
+  if (typeof window === "undefined") return DEFAULT_MEMORY_TOKEN_CAP;
+  try {
+    const raw = window.localStorage.getItem(MEMORY_TOKEN_CAP_KEY);
+    if (raw === null) return DEFAULT_MEMORY_TOKEN_CAP;
+    const parsed = Number(raw);
+    if (
+      !Number.isInteger(parsed) ||
+      parsed < MIN_MEMORY_TOKEN_CAP ||
+      parsed > MAX_MEMORY_TOKEN_CAP
+    ) {
+      return DEFAULT_MEMORY_TOKEN_CAP;
+    }
+    return parsed;
+  } catch {
+    return DEFAULT_MEMORY_TOKEN_CAP;
+  }
+}
+
+export function saveMemoryTokenCap(cap: number): void {
+  if (typeof window === "undefined") return;
+  if (!Number.isInteger(cap) || cap < MIN_MEMORY_TOKEN_CAP || cap > MAX_MEMORY_TOKEN_CAP) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(MEMORY_TOKEN_CAP_KEY, String(cap));
+  } catch {
+    // Ignore storage errors.
+  }
 }
 
 export function loadTavilyApiKey(): string | null {

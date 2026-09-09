@@ -170,6 +170,34 @@ async function runMigrationsInner(): Promise<void> {
     }
     await tursoExecute("UPDATE schema_meta SET version = 7");
   }
+
+  if (version < 8) {
+    await tursoExecute(`
+      CREATE TABLE IF NOT EXISTS memories (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT,
+        scope_key TEXT NOT NULL,
+        memory_type TEXT NOT NULL CHECK (memory_type IN ('short_term', 'long_term')),
+        normalized_content TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id)
+      )
+    `);
+    await tursoExecute(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_memories_dedup
+      ON memories (memory_type, scope_key, normalized_content)
+    `);
+    await tursoExecute(`
+      CREATE INDEX IF NOT EXISTS idx_memories_type_created
+      ON memories (memory_type, created_at DESC)
+    `);
+    await tursoExecute(`
+      CREATE INDEX IF NOT EXISTS idx_memories_conversation
+      ON memories (conversation_id, created_at DESC)
+    `);
+    await tursoExecute("UPDATE schema_meta SET version = 8");
+  }
 }
 
 function parseTags(tags: string | null): string[] {
@@ -443,7 +471,11 @@ export async function saveConversation(
 }
 
 export async function deleteConversation(id: string): Promise<void> {
+  // Foreign keys are not enforced on the Turso request path (fresh pipeline
+  // requests without PRAGMA foreign_keys), so delete scoped short-term
+  // memories explicitly before messages and the conversation row.
   await tursoExecuteMany([
+    { sql: "DELETE FROM memories WHERE conversation_id = ?", args: [id] },
     { sql: "DELETE FROM messages WHERE conversation_id = ?", args: [id] },
     { sql: "DELETE FROM conversations WHERE id = ?", args: [id] },
   ]);

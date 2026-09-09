@@ -11,6 +11,7 @@ import {
   loadDuckDuckGoSearchEnabled,
   loadFetchEnabled,
   loadGoogleSearchEnabled,
+  loadMemoryEnabled,
   loadTavilyApiKey,
   loadWebSearchEnabled,
 } from "#lib/config";
@@ -28,7 +29,10 @@ import { createPdfTool } from "#lib/tools/create-pdf";
 import { createDuckDuckGoSearchTool } from "#lib/tools/duckduckgo-search";
 import { createFetchUrlTool } from "#lib/tools/fetch-url";
 import { createGoogleSearchTool } from "#lib/tools/google-search";
+import { createRecallTool } from "#lib/tools/recall";
+import { createRememberTool } from "#lib/tools/remember";
 import { createWebSearchTool } from "#lib/tools/web-search";
+import { getTursoConfig } from "#lib/turso";
 import type { Attachment, Message, MessageModelInfo } from "#lib/types/chat";
 import { useAgentsStore } from "#store/agents";
 import {
@@ -71,7 +75,7 @@ function isGeminiProvider(baseUrl: string): boolean {
   return baseUrl.includes(GEMINI_BASE_URL_MARKER);
 }
 
-function buildEnabledTools(): Record<string, Tool> {
+function buildEnabledTools(conversationId?: string | null): Record<string, Tool> {
   const tools: Record<string, Tool> = {};
 
   if (loadFetchEnabled()) {
@@ -95,6 +99,13 @@ function buildEnabledTools(): Record<string, Tool> {
 
   if (loadCreatePdfEnabled()) {
     tools.createPdf = createPdfTool();
+  }
+
+  // Memory tools are registered only when the master switch is on and Turso
+  // storage is configured. No memory query or write happens otherwise.
+  if (loadMemoryEnabled() && getTursoConfig()) {
+    tools.remember = createRememberTool({ conversationId });
+    tools.recall = createRecallTool({ conversationId });
   }
 
   return tools;
@@ -163,15 +174,28 @@ function buildUserContent(message: Message): UserContent {
 const BASE_SYSTEM_PROMPT =
   "You are an AI assistant in Personal Agent, a desktop app created by Hadi (https://github.com/im4aLL).";
 
+const MEMORY_SYSTEM_INSTRUCTION =
+  "Memory is available through the remember and recall tools. Call recall when the user " +
+  "refers to prior conversations or stored preferences. Call remember only for durable, " +
+  "useful facts explicitly stated or clearly requested by the user. Store personal durable " +
+  "facts such as name and address as long_term so they are available across conversations. " +
+  "When recalling, pass keywords not the full sentence: for 'where do I live' call recall " +
+  "with query 'address live name'.";
+
 export function systemPromptFromState(state: {
   activeInstructionId: string | null;
   activeSkillId: string | null;
   activeAgentId: string | null;
+  memoryEnabled: boolean;
   userInstructions: Array<{ id: string; content?: string | null }>;
   skills: Array<{ id: string; content?: string | null }>;
   customAgents: Array<{ id: string; content?: string | null }>;
 }): string | undefined {
   const parts: string[] = [BASE_SYSTEM_PROMPT];
+
+  if (state.memoryEnabled) {
+    parts.push(MEMORY_SYSTEM_INSTRUCTION);
+  }
 
   if (state.activeInstructionId) {
     const instruction = state.userInstructions.find((i) => i.id === state.activeInstructionId);
@@ -189,6 +213,35 @@ export function systemPromptFromState(state: {
   }
 
   return parts.join("\n\n");
+}
+
+// Builds the system prompt from live store state plus the memory flag read at
+// call time, so send/regenerate/edit paths never use a stale memoized prompt
+// after Preferences changes.
+export function buildCurrentSystemPrompt(): string | undefined {
+  const agentsState = useAgentsStore.getState();
+  return systemPromptFromState({
+    activeInstructionId: agentsState.activeInstructionId,
+    activeSkillId: agentsState.activeSkillId,
+    activeAgentId: agentsState.activeAgentId,
+    memoryEnabled: loadMemoryEnabled(),
+    userInstructions: agentsState.userInstructions,
+    skills: agentsState.skills,
+    customAgents: agentsState.customAgents,
+  });
+}
+
+// Development-only estimate of recall result text, counted only when the
+// result actually returned memories. Turns without a recall hit add nothing.
+// Reuses the formatter's own estimatedTokens so dev logging matches the cap
+// accounting in formatRecallResult (labels + separators, no JSON overhead).
+function estimateRecallResultTokens(output: unknown): number {
+  if (!output || typeof output !== "object") return 0;
+  const result = output as { memories?: unknown; estimatedTokens?: unknown };
+  if (!Array.isArray(result.memories) || result.memories.length === 0) return 0;
+  return typeof result.estimatedTokens === "number" && Number.isFinite(result.estimatedTokens)
+    ? result.estimatedTokens
+    : 0;
 }
 
 function buildCoreMessages(messages: Message[]) {
@@ -235,12 +288,18 @@ export function useChat() {
   const agentSkills = useAgentsStore((s) => s.skills);
   const agentCustomAgents = useAgentsStore((s) => s.customAgents);
 
+  // Read at render time so the memoized prompt below always reflects the
+  // latest Preferences; send/regenerate/edit paths additionally rebuild the
+  // prompt fresh at call time (see buildCurrentSystemPrompt).
+  const memoryEnabled = loadMemoryEnabled();
+
   const systemPrompt = useMemo(
     () =>
       systemPromptFromState({
         activeInstructionId,
         activeSkillId,
         activeAgentId,
+        memoryEnabled,
         userInstructions,
         skills: agentSkills,
         customAgents: agentCustomAgents,
@@ -249,11 +308,18 @@ export function useChat() {
       activeInstructionId,
       activeSkillId,
       activeAgentId,
+      memoryEnabled,
       userInstructions,
       agentSkills,
       agentCustomAgents,
     ],
   );
+
+  // Estimated tokens returned by recall calls in the latest completed turn.
+  // Used only for development context-usage logging; memory content is never
+  // added to the prompt automatically, so turns without a recall hit add
+  // nothing here.
+  const [lastRecallTokens, setLastRecallTokens] = useState(0);
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [isOffline, setIsOffline] = useState(false);
@@ -313,7 +379,12 @@ export function useChat() {
           .filter(Boolean)
           .join("\n\n")
       : (systemPrompt ?? "");
-    const tokens = estimateTokens(outgoing.messages) + estimateTextTokens(combinedSystemPrompt);
+    // Recall result text is counted only when a recall call in the latest
+    // turn actually returned content; ordinary turns add nothing here.
+    const tokens =
+      estimateTokens(outgoing.messages) +
+      estimateTextTokens(combinedSystemPrompt) +
+      lastRecallTokens;
     const window = resolveContextWindow(
       activeProvider.baseUrl,
       selectedModel.modelId,
@@ -322,9 +393,9 @@ export function useChat() {
 
     // eslint-disable-next-line no-console
     console.log(
-      `[personal-agent] context usage: ~${tokens} tokens / ${window} window (${outgoing.messages.length} outgoing messages, incl. system prompt${outgoing.summaryText ? " + summary" : ""})`,
+      `[personal-agent] context usage: ~${tokens} tokens / ${window} window (${outgoing.messages.length} outgoing messages, incl. system prompt${outgoing.summaryText ? " + summary" : ""}${lastRecallTokens > 0 ? ` + recall ~${lastRecallTokens}` : ""})`,
     );
-  }, [conversation, activeProvider, selectedModel.modelId, systemPrompt]);
+  }, [conversation, activeProvider, selectedModel.modelId, systemPrompt, lastRecallTokens]);
 
   const canSend = Boolean(
     activeProvider &&
@@ -432,6 +503,7 @@ export function useChat() {
       setIsGenerating(true);
       abortControllerRef.current = new AbortController();
       const compactionSignal = abortControllerRef.current.signal;
+      setLastRecallTokens(0);
 
       const modelInfo: MessageModelInfo = getSelectedModelInfo({
         providers,
@@ -558,7 +630,9 @@ export function useChat() {
 
           const model = provider(selectedModel.modelId);
           const messages = buildCoreMessages(outgoing.messages);
-          const tools = isGeminiProvider(activeProvider.baseUrl) ? {} : buildEnabledTools();
+          const tools = isGeminiProvider(activeProvider.baseUrl)
+            ? {}
+            : buildEnabledTools(conversationId);
           const hasTools = Object.keys(tools).length > 0;
 
           const { stream } = streamText({
@@ -585,6 +659,12 @@ export function useChat() {
               } else if (part.type === "tool-result") {
                 // eslint-disable-next-line no-console
                 console.log(`[personal-agent] tool result: ${part.toolName}`, part.output);
+                if (part.toolName === "recall") {
+                  const recalledTokens = estimateRecallResultTokens(part.output);
+                  if (recalledTokens > 0) {
+                    setLastRecallTokens((previous) => previous + recalledTokens);
+                  }
+                }
               } else if (part.type === "tool-error") {
                 // eslint-disable-next-line no-console
                 console.log(`[personal-agent] tool error: ${part.toolName}`, part.error);
@@ -756,8 +836,9 @@ export function useChat() {
       // Build system prompt from the freshly activated state (not from the useMemo
       // closure, which is stale at this point because activateSkill/activateAgent
       // were called synchronously above and React has not re-rendered yet).
-      const freshState = useAgentsStore.getState();
-      const activePrompt = systemPromptFromState(freshState);
+      // buildCurrentSystemPrompt also reads the memory flag at send time so a
+      // Preferences change applies to the next request without a reload.
+      const activePrompt = buildCurrentSystemPrompt();
 
       const currentConversation = selectSelectedConversation(useChatStore.getState());
       if (!currentConversation) {
@@ -814,16 +895,9 @@ export function useChat() {
     await streamAssistantResponse(
       currentConversation.id,
       currentConversation.messages,
-      systemPrompt,
+      buildCurrentSystemPrompt(),
     );
-  }, [
-    conversation,
-    activeProvider,
-    isCompacting,
-    regenerateMessage,
-    streamAssistantResponse,
-    systemPrompt,
-  ]);
+  }, [conversation, activeProvider, isCompacting, regenerateMessage, streamAssistantResponse]);
 
   const editMessage = useCallback(
     async (messageId: string, content: string) => {
@@ -849,17 +923,10 @@ export function useChat() {
       await streamAssistantResponse(
         currentConversation.id,
         currentConversation.messages,
-        systemPrompt,
+        buildCurrentSystemPrompt(),
       );
     },
-    [
-      conversation,
-      activeProvider,
-      isCompacting,
-      editMessageInStore,
-      streamAssistantResponse,
-      systemPrompt,
-    ],
+    [conversation, activeProvider, isCompacting, editMessageInStore, streamAssistantResponse],
   );
 
   const retry = useCallback(() => {

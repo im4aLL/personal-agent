@@ -42,6 +42,7 @@ import { Popover, PopoverAnchor, PopoverContent } from "#components/ui/popover";
 import { Textarea } from "#components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "#components/ui/tooltip";
 import { systemPromptFromState, useChat } from "#hooks/use-chat";
+import { loadMemoryEnabled } from "#lib/config";
 import {
   buildOutgoingContext,
   estimatePendingTokens,
@@ -649,6 +650,8 @@ export function MessageInput() {
   const effectivePendingText =
     trimmedPendingText || (attachments.length > 0 || slashActivation ? "Hello" : "");
 
+  const memoryEnabledForPreview = loadMemoryEnabled();
+
   const pendingSystemPrompt = useMemo(() => {
     if (!slashActivation) return systemPrompt ?? "";
     return (
@@ -656,6 +659,7 @@ export function MessageInput() {
         activeInstructionId,
         activeSkillId: slashActivation.kind === "skill" ? slashActivation.id : activeSkillId,
         activeAgentId: slashActivation.kind === "agent" ? slashActivation.id : activeAgentId,
+        memoryEnabled: memoryEnabledForPreview,
         userInstructions,
         skills,
         customAgents: agents,
@@ -667,6 +671,7 @@ export function MessageInput() {
     activeInstructionId,
     activeSkillId,
     activeAgentId,
+    memoryEnabledForPreview,
     userInstructions,
     skills,
     agents,

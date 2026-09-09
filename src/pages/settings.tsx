@@ -2,6 +2,7 @@
 
 import {
   BotIcon,
+  BrainIcon,
   DatabaseIcon,
   DownloadIcon,
   PaletteIcon,
@@ -17,6 +18,7 @@ import { toast } from "sonner";
 import { CustomAgentsTab, InstructionsTab, SkillsTab } from "#components/settings/agents-tab";
 import { AppearanceTab } from "#components/settings/appearance-tab";
 import { DataTab } from "#components/settings/data-tab";
+import { PreferencesTab } from "#components/settings/preferences-tab";
 import { ProviderForm, type ProviderFormData } from "#components/settings/provider-form";
 import { ProvidersList } from "#components/settings/providers-list";
 import { WebSearchTab } from "#components/settings/web-search-tab";
@@ -41,6 +43,7 @@ type SettingsSection =
   | "appearance"
   | "data"
   | "tool"
+  | "preferences"
   | "instructions"
   | "skills"
   | "agents";
@@ -53,6 +56,7 @@ const SECTIONS: {
   { id: "data", label: "Data", icon: DatabaseIcon },
   { id: "providers", label: "Providers", icon: ServerIcon },
   { id: "tool", label: "Tool", icon: WrenchIcon },
+  { id: "preferences", label: "Preferences", icon: BrainIcon },
   { id: "appearance", label: "Appearance", icon: PaletteIcon },
   { id: "instructions", label: "Instructions", icon: ScrollTextIcon },
   { id: "skills", label: "Skills", icon: Wand2Icon },
@@ -384,6 +388,20 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent>
                   <WebSearchTab />
+                </CardContent>
+              </Card>
+            )}
+
+            {activeSection === "preferences" && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Preferences</CardTitle>
+                  <CardDescription>
+                    Control agent memory and other chat preferences.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <PreferencesTab onNavigateToData={() => setActiveSection("data")} />
                 </CardContent>
               </Card>
             )}

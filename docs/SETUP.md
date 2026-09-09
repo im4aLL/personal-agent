@@ -7,6 +7,7 @@ Detailed, step-by-step setup for Personal Agent. For the project overview and fe
 - [Provider Setup](#provider-setup)
 - [Custom Instructions, Skills, and Agents](#custom-instructions-skills-and-agents)
 - [Web Search Setup](#web-search-setup)
+- [Agent Memory](#agent-memory)
 - [Turso Database](#turso-database)
 - [Settings Export](#settings-export)
 
@@ -119,6 +120,17 @@ Each tool below is off by default and toggled independently in Settings > Web Se
 
 Tools are unavailable on Gemini-family providers regardless of these settings (see [ARCHITECTURE.md](../ARCHITECTURE.md#10-agentic-tool-calling-web-search--fetch)).
 
+## Agent Memory
+
+Agent memory is off by default and controlled in Settings > Preferences. It requires a configured Turso database (see [Turso Database](#turso-database)); enabling it without Turso does not break chat, it just leaves the memory tools unregistered.
+
+1. Enable the **Memory** master switch to give the agent `remember` and `recall` tools plus a short usage instruction. Stored memories are never injected into every prompt - the agent calls `recall` only when prior context seems relevant.
+2. Toggle **Short-term memory** (facts scoped to the current conversation, removed when the conversation is deleted) and **Long-term memory** (facts shared across all conversations) independently. Disabling a type stops new reads and writes of that type but keeps existing rows.
+3. Set the **maximum recall result size** (default 500 tokens, range 1-2000). A single recall result never exceeds this cap; oversized matches are truncated or omitted and flagged as truncated.
+4. Use **Clear memories** to remove all stored short-term and long-term memories after confirmation.
+
+Memory tools are also unavailable on Gemini-family providers, like all other tools.
+
 ## Turso Database
 
 Connect to a [Turso](https://turso.tech) database for persistent conversation storage and multi-device sync.
@@ -126,7 +138,7 @@ Connect to a [Turso](https://turso.tech) database for persistent conversation st
 1. Create a database at [turso.tech](https://turso.tech)
 2. Get your database URL (`libsql://...`) and auth token
 3. In Settings > Data, enter the URL and token, then click "Test Connection"
-4. Once connected, conversations, agents, skills, and instructions are automatically persisted and synced across devices
+4. Once connected, conversations, agents, skills, instructions, and agent memories are automatically persisted and synced across devices
 
 ## Settings Export
 
