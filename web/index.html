@@ -407,6 +407,35 @@
                   stroke-linejoin="round"
                   aria-hidden="true"
                 >
+                  <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+                  <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+                  <path d="M15 13a4.5 4.5 0 0 1-3 4 4.5 4.5 0 0 1-3-4" />
+                  <path d="M17.599 6.5a3 3 0 0 0 .399-1.375" />
+                  <path d="M6.003 5.125A3 3 0 0 0 6.401 6.5" />
+                  <path d="M3.477 10.896a4 4 0 0 1 .585-.396" />
+                  <path d="M19.938 10.5a4 4 0 0 1 .585.396" />
+                  <path d="M6 18a4 4 0 0 1-1.967-.516" />
+                  <path d="M19.967 17.484A4 4 0 0 1 18 18" />
+                </svg>
+              </div>
+              <h3 class="feature-card__title">Agent memory</h3>
+              <p class="feature-card__text">
+                An agent that grows with you. Tell it your name, preferences, and decisions once -
+                it remembers across conversations and recalls only when relevant. Off by default,
+                and always yours to clear.
+              </p>
+            </article>
+            <article class="feature-card reveal">
+              <div class="icon-tile">
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
                   <path
                     d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"
                   />
@@ -455,6 +484,66 @@
             </ul>
             <p class="palette__hint">Enter to activate</p>
           </div>
+        </div>
+      </section>
+
+      <section class="section memory" id="memory">
+        <div class="container">
+          <header class="section__head reveal">
+            <p class="section__eyebrow">Agent memory</p>
+            <h2 class="section__title">Tell it once. It remembers.</h2>
+            <p class="section__lead">
+              Your agent keeps a brain of its own. Mention a preference, a name, a decision - it
+              files the durable bits away and pulls them back out only when they matter, even in a
+              brand-new conversation weeks later.
+            </p>
+          </header>
+          <div class="memory__story reveal">
+            <div class="memory__moment">
+              <p class="memory__when">Tuesday - Trip brainstorm</p>
+              <div class="memory__chat">
+                <p class="mockup__message mockup__message--user">
+                  Heads up, I am vegetarian - keep that in mind for anything food-related.
+                </p>
+                <p class="mockup__message mockup__message--agent">
+                  Noted. Saved to long-term memory.
+                </p>
+              </div>
+            </div>
+            <div class="memory__bridge">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+              <span>a month later, a brand-new conversation</span>
+            </div>
+            <div class="memory__moment">
+              <p class="memory__when">A month later - Dinner plans</p>
+              <div class="memory__chat">
+                <p class="mockup__message mockup__message--user">
+                  Find me dinner spots near the venue.
+                </p>
+                <p class="mockup__message mockup__message--agent">
+                  Since you are vegetarian, here are three places within walking distance...
+                </p>
+                <p class="memory__recall">recalled 1 memory - diet: vegetarian</p>
+              </div>
+            </div>
+          </div>
+          <ul class="memory__points reveal reveal--d1">
+            <li>Off by default</li>
+            <li>Short-term and long-term</li>
+            <li>Recalls only when relevant</li>
+            <li>Yours to clear anytime</li>
+          </ul>
         </div>
       </section>
 

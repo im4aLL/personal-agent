@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.8.0
+
+### Features
+- Add opt-in agent memory: the agent can remember durable facts (name, preferences, decisions) and recall them across conversations via `remember` and `recall` tools, with a Preferences settings section (master switch off by default, short-term/long-term toggles, token-capped recall, clear memories) and a schema v8 `memories` table (`5cd71d0`)
+
 ## 1.7.0
 
 ### Features
