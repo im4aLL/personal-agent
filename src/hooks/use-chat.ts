@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { proxyFetch } from "#lib/ai";
 import {
+  loadCreatePdfEnabled,
   loadDuckDuckGoSearchEnabled,
   loadFetchEnabled,
   loadGoogleSearchEnabled,
@@ -23,6 +24,7 @@ import {
 } from "#lib/context";
 import { buildOpencodeGoHeaders, shouldUseProxy } from "#lib/providers";
 import { generateConversationSummary, generateConversationTitle } from "#lib/title";
+import { createPdfTool } from "#lib/tools/create-pdf";
 import { createDuckDuckGoSearchTool } from "#lib/tools/duckduckgo-search";
 import { createFetchUrlTool } from "#lib/tools/fetch-url";
 import { createGoogleSearchTool } from "#lib/tools/google-search";
@@ -89,6 +91,10 @@ function buildEnabledTools(): Record<string, Tool> {
 
   if (loadDuckDuckGoSearchEnabled()) {
     tools.duckduckgoSearch = createDuckDuckGoSearchTool();
+  }
+
+  if (loadCreatePdfEnabled()) {
+    tools.createPdf = createPdfTool();
   }
 
   return tools;

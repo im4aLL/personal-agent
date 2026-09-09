@@ -8,11 +8,13 @@ import { Label } from "#components/ui/label";
 import { Switch } from "#components/ui/switch";
 import {
   clearTavilyApiKey,
+  loadCreatePdfEnabled,
   loadDuckDuckGoSearchEnabled,
   loadFetchEnabled,
   loadGoogleSearchEnabled,
   loadTavilyApiKey,
   loadWebSearchEnabled,
+  saveCreatePdfEnabled,
   saveDuckDuckGoSearchEnabled,
   saveFetchEnabled,
   saveGoogleSearchEnabled,
@@ -27,6 +29,7 @@ export function WebSearchTab() {
   const [fetchEnabled, setFetchEnabled] = useState(false);
   const [googleSearchEnabled, setGoogleSearchEnabled] = useState(false);
   const [duckDuckGoSearchEnabled, setDuckDuckGoSearchEnabled] = useState(false);
+  const [createPdfEnabled, setCreatePdfEnabled] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [touched, setTouched] = useState(false);
 
@@ -35,6 +38,7 @@ export function WebSearchTab() {
     setFetchEnabled(loadFetchEnabled());
     setGoogleSearchEnabled(loadGoogleSearchEnabled());
     setDuckDuckGoSearchEnabled(loadDuckDuckGoSearchEnabled());
+    setCreatePdfEnabled(loadCreatePdfEnabled());
     setApiKey(loadTavilyApiKey() ?? "");
   }, []);
 
@@ -71,6 +75,12 @@ export function WebSearchTab() {
     toast.success(
       enabled ? "DuckDuckGo search window enabled" : "DuckDuckGo search window disabled",
     );
+  }
+
+  function handleToggleCreatePdf(enabled: boolean) {
+    setCreatePdfEnabled(enabled);
+    saveCreatePdfEnabled(enabled);
+    toast.success(enabled ? "PDF creation enabled" : "PDF creation disabled");
   }
 
   function handleSaveKey(event: React.FormEvent) {
@@ -176,6 +186,17 @@ export function WebSearchTab() {
           </p>
         </div>
         <Switch checked={duckDuckGoSearchEnabled} onCheckedChange={handleToggleDuckDuckGoSearch} />
+      </div>
+
+      <div className="flex items-center justify-between gap-4 border-t pt-6">
+        <div>
+          <h3 className="text-base font-medium">PDF creation</h3>
+          <p className="text-sm text-muted-foreground">
+            Let the agent create PDF documents from a title and text. You choose where to save each
+            file.
+          </p>
+        </div>
+        <Switch checked={createPdfEnabled} onCheckedChange={handleToggleCreatePdf} />
       </div>
     </div>
   );

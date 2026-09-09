@@ -7,6 +7,7 @@ export const WEB_SEARCH_ENABLED_KEY = "personal-agent:web-search-enabled";
 export const FETCH_ENABLED_KEY = "personal-agent:fetch-enabled";
 export const GOOGLE_SEARCH_ENABLED_KEY = "personal-agent:google-search-enabled";
 export const DUCKDUCKGO_SEARCH_ENABLED_KEY = "personal-agent:duckduckgo-search-enabled";
+export const CREATE_PDF_ENABLED_KEY = "personal-agent:create-pdf-enabled";
 export const TAVILY_API_KEY_KEY = "personal-agent:tavily-api-key";
 export const CHAT_FIXED_WIDTH_KEY = "personal-agent:chat-fixed-width";
 const SHOW_MESSAGE_ICONS_KEY = "personal-agent:show-message-icons";
@@ -240,6 +241,14 @@ export function loadDuckDuckGoSearchEnabled(): boolean {
 
 export function saveDuckDuckGoSearchEnabled(enabled: boolean): void {
   saveBooleanFlag(DUCKDUCKGO_SEARCH_ENABLED_KEY, enabled);
+}
+
+export function loadCreatePdfEnabled(): boolean {
+  return loadBooleanFlag(CREATE_PDF_ENABLED_KEY);
+}
+
+export function saveCreatePdfEnabled(enabled: boolean): void {
+  saveBooleanFlag(CREATE_PDF_ENABLED_KEY, enabled);
 }
 
 export function loadTavilyApiKey(): string | null {

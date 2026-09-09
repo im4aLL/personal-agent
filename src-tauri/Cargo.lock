@@ -2922,6 +2922,7 @@ version = "1.6.0"
 dependencies = [
  "base64 0.22.1",
  "futures-util",
+ "lopdf",
  "pdf-inspector",
  "reqwest 0.12.28",
  "serde",
