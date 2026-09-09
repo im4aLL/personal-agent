@@ -1,6 +1,6 @@
 name: personal-agent
 base: core22
-version: '1.5.0'
+version: '1.7.0'
 title: Personal Agent
 summary: Local-first AI chat desktop app with custom instructions, skills, and agents.
 license: MIT

@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.7.0
+
+### Features
+- Add create-pdf agent tool: agents can generate a formatted PDF (title plus light-markdown body via `lopdf`) and save it through a save dialog, with a "PDF creation" toggle in Web Search settings (`7473304`)
+- Switch PDF text extraction from `pdf-extract` to `pdf-inspector`, returning extracted markdown with clearer errors for password-protected and scanned PDFs (`0b54800`)
+
+### Fixes
+- Make reasoning transient: stop persisting reasoning to the messages table (schema v7 drops the `reasoning` column) and serialize concurrent migration runs (`7ec41c0`)
+
 ## 1.6.0
 
 ### Fixes
