@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.6.0
+
+### Fixes
+- Fix Opencode Go requests failing with HTTP 400 MissingSessionID: send a stable `x-opencode-session` per conversation and a `personal-agent` User-Agent, routing Go traffic through the Rust proxy (`d2a40cd`)
+- Send the `personal-agent` User-Agent on every provider request, sourced dynamically from the app version (`d2a40cd`)
+
 ## 1.5.0
 
 ### Features
