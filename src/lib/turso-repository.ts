@@ -17,7 +17,6 @@ interface TursoMessageRow {
   conversation_id: string;
   role: string;
   content: string;
-  reasoning: string | null;
   status: string | null;
   error: string | null;
   edited_at: string | null;
@@ -29,7 +28,19 @@ interface TursoMessageRow {
   thinking_level: string | null;
 }
 
-export async function runMigrations(): Promise<void> {
+let migrationsInFlight: Promise<void> | null = null;
+
+export function runMigrations(): Promise<void> {
+  // Serialize concurrent callers (React StrictMode double-invokes effects in
+  // dev, and MigrationRunner + store loaders each call this). Without this,
+  // two runs can interleave DDL and one fails spuriously.
+  migrationsInFlight ??= runMigrationsInner().finally(() => {
+    migrationsInFlight = null;
+  });
+  return migrationsInFlight;
+}
+
+async function runMigrationsInner(): Promise<void> {
   // Ensure schema_meta exists. SQLite tables always have an implicit rowid column.
   await tursoExecute(`
     CREATE TABLE IF NOT EXISTS schema_meta (
@@ -55,7 +66,6 @@ export async function runMigrations(): Promise<void> {
       conversation_id TEXT NOT NULL,
       role TEXT NOT NULL,
       content TEXT NOT NULL,
-      reasoning TEXT,
       status TEXT,
       error TEXT,
       edited_at TEXT,
@@ -145,6 +155,21 @@ export async function runMigrations(): Promise<void> {
     await tursoExecute("ALTER TABLE conversations ADD COLUMN summarized_up_to_id TEXT");
     await tursoExecute("UPDATE schema_meta SET version = 6");
   }
+
+  if (version < 7) {
+    const columns = await tursoSelect<{ name: string }>("PRAGMA table_info(messages)");
+    if (columns.some((col) => col.name === "reasoning")) {
+      try {
+        await tursoExecute("ALTER TABLE messages DROP COLUMN reasoning");
+      } catch (error) {
+        // Tolerate a concurrent run having dropped the column first:
+        // only rethrow if the column is still there.
+        const after = await tursoSelect<{ name: string }>("PRAGMA table_info(messages)");
+        if (after.some((col) => col.name === "reasoning")) throw error;
+      }
+    }
+    await tursoExecute("UPDATE schema_meta SET version = 7");
+  }
 }
 
 function parseTags(tags: string | null): string[] {
@@ -176,7 +201,9 @@ function mapRowToMessage(row: TursoMessageRow): Message {
     id: row.id,
     role: row.role as Message["role"],
     content: row.content,
-    reasoning: row.reasoning ? { content: row.reasoning } : undefined,
+    // Reasoning is intentionally transient (live streaming display only)
+    // and is never restored from persistence, so reloads show no thinking block.
+    reasoning: undefined,
     status: (row.status as Message["status"]) ?? undefined,
     error: row.error ?? undefined,
     editedAt: row.edited_at ? new Date(row.edited_at) : undefined,
@@ -308,7 +335,7 @@ export async function loadMessages(conversationId: string): Promise<Message[]> {
   if (!config) return [];
 
   const msgRows = await tursoSelect<TursoMessageRow>(
-    `SELECT id, conversation_id, role, content, reasoning, status, error, edited_at, created_at,
+    `SELECT id, conversation_id, role, content, status, error, edited_at, created_at,
             model_provider_id, model_provider_name, model_id, model_name, thinking_level
      FROM messages WHERE conversation_id = ? ORDER BY created_at ASC`,
     [conversationId],
@@ -379,7 +406,6 @@ export async function saveConversation(
   // so we update only the conversation row without touching messages.
   if (conversation.messages !== undefined && conversation.messages.length > 0) {
     for (const message of conversation.messages) {
-      const reasoningValue = message.reasoning?.content ?? null;
       const statusValue = message.status ?? null;
       const errorValue = message.error ?? null;
       const editedAtValue = message.editedAt?.toISOString() ?? null;
@@ -391,15 +417,14 @@ export async function saveConversation(
 
       requests.push({
         sql: `INSERT OR REPLACE INTO messages (
-          id, conversation_id, role, content, reasoning, status, error, edited_at, created_at,
+          id, conversation_id, role, content, status, error, edited_at, created_at,
           model_provider_id, model_provider_name, model_id, model_name, thinking_level
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           message.id,
           conversation.id,
           message.role,
           message.content,
-          reasoningValue,
           statusValue,
           errorValue,
           editedAtValue,
@@ -425,7 +450,7 @@ export async function deleteConversation(id: string): Promise<void> {
 }
 
 export async function saveMessage(conversationId: string, message: Message): Promise<void> {
-  const reasoningValue = message.reasoning?.content ?? null;
+  // Reasoning is intentionally not persisted - transient live-streaming display only.
   const statusValue = message.status ?? null;
   const errorValue = message.error ?? null;
   const editedAtValue = message.editedAt?.toISOString() ?? null;
@@ -449,15 +474,14 @@ export async function saveMessage(conversationId: string, message: Message): Pro
     },
     {
       sql: `INSERT OR REPLACE INTO messages (
-        id, conversation_id, role, content, reasoning, status, error, edited_at, created_at,
+        id, conversation_id, role, content, status, error, edited_at, created_at,
         model_provider_id, model_provider_name, model_id, model_name, thinking_level
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       args: [
         message.id,
         conversationId,
         message.role,
         message.content,
-        reasoningValue,
         statusValue,
         errorValue,
         editedAtValue,
