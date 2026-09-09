@@ -66,7 +66,10 @@ parts:
       export PATH="$CARGO_HOME/bin:$PATH"
       npm install
       npm run tauri build -- --bundles deb
-      dpkg -x src-tauri/target/release/bundle/deb/*.deb $SNAPCRAFT_PART_INSTALL/
+      # A stale deb from a previous version may exist next to the fresh one
+      # (source: . copies the local target/ tree), so pick the newest.
+      deb="$(ls -t src-tauri/target/release/bundle/deb/*.deb | head -n 1)"
+      dpkg -x "$deb" $SNAPCRAFT_PART_INSTALL/
       mv "$SNAPCRAFT_PART_INSTALL/usr/share/applications/Personal Agent.desktop" "$SNAPCRAFT_PART_INSTALL/usr/share/applications/personal-agent.desktop"
       sed -i -e "s|Icon=personal-agent|Icon=/usr/share/icons/hicolor/32x32/apps/personal-agent.png|g" $SNAPCRAFT_PART_INSTALL/usr/share/applications/personal-agent.desktop
       # Let the GNOME extension provide the matching GLVND/Mesa stack. The
