@@ -246,7 +246,7 @@ flowchart LR
     LIB --> P2
     GS --> SW
     DDG --> SW
-    PDF -->|pdf-extract crate| PDFTXT[PDF file -> extracted text]
+    PDF -->|pdf-inspector crate| PDFTXT[PDF file -> extracted markdown]
     PROXY -->|Channel<StreamChunk>| FRONT[Frontend Channel API]
     SW -->|scripted WebviewWindow + eval polling| ENGINE[Google / DuckDuckGo results page]
 ```
@@ -261,7 +261,7 @@ Registered commands (lib.rs):
 | `proxy_bytes` | Binary proxy returning base64 (used for file downloads) |
 | `google_search` / `collect_google_results` | Opens a scripted Google results webview and scrapes results |
 | `duckduckgo_search` / `collect_duckduckgo_results` | Same pattern against DuckDuckGo |
-| `extract_pdf_text` | Extracts text from a PDF attachment's bytes (via the `pdf-extract` crate, capped at 20 MB, wrapped in `catch_unwind` for malformed files) |
+| `extract_pdf_text` | Extracts markdown from a PDF attachment's bytes (via the `pdf-inspector` crate, capped at 20 MB, wrapped in `catch_unwind` for malformed files) |
 | `write_file` | Writes bytes to a path chosen via the save dialog |
 
 Rust holds no application state beyond `StreamState` (a map of abort IDs to oneshot senders); all business logic lives in the frontend. `google_search`/`duckduckgo_search` are the exception: `search_window.rs` opens a real, visible `WebviewWindow` pointed at the engine's results page, injects a "Done" button via `initialization_script`, and polls (`eval_with_callback`, 500ms interval, 2 minute timeout) until the user clicks it and `window.__paResults` is populated - this is a human-in-the-loop scrape, not a headless request, because these engines block scripted/headless traffic.
