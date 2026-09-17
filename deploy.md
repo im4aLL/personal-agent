@@ -19,7 +19,7 @@ are not covered here.
 
 ## 0. Version bump checklist
 
-Keep these in sync before building (currently `1.8.0` except PKGBUILD):
+Keep these in sync before building (currently `1.9.0` except PKGBUILD):
 
 | File | Field |
 | --- | --- |

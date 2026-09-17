@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.9.0
+
+### Fixes
+- Fix message bubble output collapsing: single newlines in plain prose now render as line breaks, and unfenced directory trees and bare JSON blocks are auto-fenced as code blocks so indentation is preserved (`d30e845`)
+- Fix language-less multiline code rendering inline instead of as a block with copy button, and recognize language tags containing `+`/`-` (`d30e845`)
+- Keep hr and table dividers visible on bubble backgrounds in light and dark mode, and restore spacing between headings and tables (`d30e845`)
+- Tweak message input display: truncate the model and thinking selectors to fixed widths, tighten input padding, drop the footer disclaimer (`d30e845`)
+
 ## 1.8.0
 
 ### Features
