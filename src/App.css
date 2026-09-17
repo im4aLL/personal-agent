@@ -136,3 +136,16 @@
   background: transparent;
   padding: 0;
 }
+
+/* hr and table dividers derive from the bubble text color so they stay
+   visible on bubble backgrounds in both light and dark mode. The theme
+   --border color matches the bubble fill in dark mode, making it invisible. */
+.prose :is(hr, thead, tbody tr, tfoot) {
+  border-color: color-mix(in oklab, currentColor 10%, transparent);
+}
+
+/* Typography zeroes the top margin of anything directly after h2-h4,
+   which glues a table to its header. Restore breathing room. */
+.prose :is(h1, h2, h3, h4, h5, h6) + table {
+  margin-top: 1rem;
+}

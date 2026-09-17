@@ -234,10 +234,15 @@ function ModelSelector() {
     >
       <ComboboxTrigger
         render={
-          <Button type="button" variant="ghost" size="sm" className="h-9 gap-1 px-2 text-xs">
-            {isLoading ? <Loader2Icon className="size-3 animate-spin" /> : null}
-            {selectedLabel}
-            <ChevronDownIcon className="size-3 text-muted-foreground" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 w-48 shrink-0 gap-1 px-2 text-xs"
+          >
+            {isLoading ? <Loader2Icon className="size-3 shrink-0 animate-spin" /> : null}
+            <span className="min-w-0 flex-1 truncate text-left">{selectedLabel}</span>
+            <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />
           </Button>
         }
       />
@@ -299,10 +304,15 @@ function ThinkingSelector() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button type="button" variant="ghost" size="sm" className="h-9 gap-1 px-2 text-xs">
-          <BrainIcon className="size-3.5" />
-          {selectedLabel}
-          <ChevronDownIcon className="size-3 text-muted-foreground" />
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-9 w-40 shrink-0 gap-1 px-2 text-xs"
+        >
+          <BrainIcon className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate text-left">{selectedLabel}</span>
+          <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
@@ -906,7 +916,7 @@ export function MessageInput() {
     <div className="border-t bg-background px-4 py-4">
       <div
         className={cn(
-          "relative flex flex-col rounded-2xl border bg-background p-3 dark:bg-transparent",
+          "relative flex flex-col rounded-2xl border bg-background p-2 dark:bg-transparent",
           fixedWidth && "max-w-[896px] mx-auto",
         )}
       >
@@ -1096,9 +1106,6 @@ export function MessageInput() {
           )}
         </div>
       </div>
-      <p className="mt-2 text-center text-xs text-muted-foreground">
-        AI can make mistakes. Verify important information.
-      </p>
       <SlashCommandAutocomplete
         open={slashOpen && showSlashAutocomplete && slashItems.length > 0}
         onOpenChange={setSlashOpen}
