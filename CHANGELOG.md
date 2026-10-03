@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.10.0
+
+### Features
+- Add model search to the provider list, with the enable/disable all toggle scoped to the currently filtered models (`c6ed0e7`)
+
+### Fixes
+- Retry interrupted streams: treat a proxy stream that stalls with no data for 120s and a provider connection that closes before any output as retryable, and clear partial output before each retry so text and reasoning are not duplicated (`c6ed0e7`)
+
+### Improvements
+- Make the UI responsive on small screens: settings navigation and panels stack vertically, provider actions collapse into a menu, and the chat input selectors and actions reflow (`63df6b3`)
+
 ## 1.9.0
 
 ### Fixes
