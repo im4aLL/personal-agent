@@ -19,9 +19,9 @@ import { getTursoConfig } from "#lib/turso";
 import {
   deleteConversation as deleteConversationRemote,
   deleteMessage as deleteMessageRemote,
+  loadConversationMetadata,
   loadConversationSummaries,
   loadConversationsForMonth,
-  loadConversationMetadata,
   loadMessages as loadMessagesRemote,
   runMigrations,
   saveConversation,
@@ -97,6 +97,7 @@ export type ChatState = {
   addMessage: (conversationId: string, message: Message) => void;
   appendMessageContent: (conversationId: string, messageId: string, delta: string) => void;
   appendMessageReasoning: (conversationId: string, messageId: string, delta: string) => void;
+  resetMessageOutput: (conversationId: string, messageId: string) => void;
   setMessageStatus: (conversationId: string, messageId: string, status: Message["status"]) => void;
   setMessageError: (conversationId: string, messageId: string, error: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
@@ -113,7 +114,10 @@ export type ChatState = {
   setDefaultProvider: (id: string) => void;
   setProviderSyncEnabledFlag: (providerId: string, enabled: boolean) => void;
   refreshProviderModels: (providerId: string) => Promise<void>;
-  enableProviderSync: (options: { passphrase?: string; recoveryKey?: string }) => Promise<string | undefined>;
+  enableProviderSync: (options: {
+    passphrase?: string;
+    recoveryKey?: string;
+  }) => Promise<string | undefined>;
   disableProviderSync: () => void;
   syncProviders: (
     onSummary?: (summary: MergeSummary) => Promise<boolean>,
@@ -121,6 +125,7 @@ export type ChatState = {
   loadProviderSyncKey: () => Promise<void>;
   toggleModelEnabled: (providerId: string, modelId: string, enabled: boolean) => void;
   setProviderModelsEnabled: (providerId: string, enabled: boolean) => void;
+  setModelsEnabled: (modelKeys: string[], enabled: boolean) => void;
   setAllModelsEnabled: (enabled: boolean) => void;
   isModelEnabled: (providerId: string, modelId: string) => boolean;
   getEnabledModels: (providerId: string) => ModelInfo[];
@@ -599,6 +604,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
   },
 
+  // Clears streamed output before a retry attempt so partial text and
+  // reasoning from the interrupted attempt are not concatenated with the
+  // retried attempt's output.
+  resetMessageOutput: (conversationId, messageId) => {
+    set((state) => ({
+      conversations: updateConversation(state, conversationId, (conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) =>
+          message.id === messageId ? { ...message, content: "", reasoning: undefined } : message,
+        ),
+      })),
+    }));
+  },
+
   setMessageStatus: (conversationId, messageId, status) => {
     set((state) => ({
       conversations: updateConversation(state, conversationId, (conversation) => ({
@@ -806,9 +825,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
       set((currentState) => {
         // Remove old unpinned month entries from conversations, keeping pinned ones.
-        const oldIds = new Set(
-          (currentState.monthConversations[month] ?? []).map((c) => c.id),
-        );
+        const oldIds = new Set((currentState.monthConversations[month] ?? []).map((c) => c.id));
         const filteredConversations = currentState.conversations.filter(
           (c) => !(oldIds.has(c.id) && !c.pinned),
         );
@@ -1168,6 +1185,23 @@ export const useChatStore = create<ChatState>((set, get) => ({
     saveDisabledModels(next);
   },
 
+  setModelsEnabled: (modelKeys, enabled) => {
+    if (modelKeys.length === 0) return;
+
+    const state = get();
+    const next = new Set(state.disabledModels);
+    for (const key of modelKeys) {
+      if (enabled) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+    }
+
+    set({ disabledModels: next });
+    saveDisabledModels(next);
+  },
+
   setAllModelsEnabled: (enabled) => {
     const state = get();
     const allModelKeys: string[] = [];
@@ -1256,7 +1290,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
 
     providerStorage.setProviderSyncEnabled(true);
-    set({ providerSyncEnabled: true, providerSyncKey: key, providerSyncKeyLoaded: true, providerSyncError: null });
+    set({
+      providerSyncEnabled: true,
+      providerSyncKey: key,
+      providerSyncKeyLoaded: true,
+      providerSyncError: null,
+    });
     return recoveryKey;
   },
 

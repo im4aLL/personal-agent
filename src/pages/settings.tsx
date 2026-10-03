@@ -114,6 +114,7 @@ export default function SettingsPage() {
   const disabledModels = useChatStore((state) => state.disabledModels);
   const toggleModelEnabled = useChatStore((state) => state.toggleModelEnabled);
   const setProviderModelsEnabled = useChatStore((state) => state.setProviderModelsEnabled);
+  const setModelsEnabled = useChatStore((state) => state.setModelsEnabled);
   const setAllModelsEnabled = useChatStore((state) => state.setAllModelsEnabled);
 
   const [activeSection, setActiveSection] = useState<SettingsSection>("data");
@@ -284,6 +285,7 @@ export default function SettingsPage() {
                       onToggleModel={toggleModelEnabled}
                       onSetAllModelsEnabled={setAllModelsEnabled}
                       onSetProviderModelsEnabled={setProviderModelsEnabled}
+                      onSetModelsEnabled={setModelsEnabled}
                     />
 
                     <div className="flex items-center justify-between gap-4">

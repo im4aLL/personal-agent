@@ -52,6 +52,22 @@ function toError(value: unknown): Error {
   return new Error("Proxy stream failed");
 }
 
+// Marks errors that originate from the proxy stream body (including Rust-side
+// stalls and premature closes). Callers use the marker, not message text, to
+// decide whether the interruption is retryable, so wrapping by the AI SDK
+// cannot hide it.
+export const PROXY_STREAM_ERROR_NAME = "ProxyStreamError";
+
+function createProxyStreamError(message: string): Error {
+  const error = new Error(message);
+  error.name = PROXY_STREAM_ERROR_NAME;
+  return error;
+}
+
+export function isProxyStreamError(value: unknown): boolean {
+  return value instanceof Error && value.name === PROXY_STREAM_ERROR_NAME;
+}
+
 function createStreamResponse(
   channel: Channel<StreamChunk>,
   request: StreamRequest,
@@ -75,7 +91,7 @@ function createStreamResponse(
         } else if ("error" in chunk) {
           isAborted = true;
           onDone();
-          controller.error(new Error(chunk.error));
+          controller.error(createProxyStreamError(chunk.error));
         } else if ("done" in chunk) {
           isAborted = true;
           onDone();

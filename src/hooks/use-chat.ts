@@ -5,7 +5,7 @@ import type { FilePart, TextPart, UserContent } from "@ai-sdk/provider-utils";
 import { APICallError, stepCountIs, streamText, type Tool } from "ai";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { proxyFetch } from "#lib/ai";
+import { isProxyStreamError, proxyFetch } from "#lib/ai";
 import {
   loadCreatePdfEnabled,
   loadDuckDuckGoSearchEnabled,
@@ -45,6 +45,16 @@ import {
 
 const MAX_STREAM_RETRIES = 2;
 const STREAM_RETRY_BASE_DELAY_MS = 1000;
+
+// Raised when the provider connection ends before the response is complete
+// (for example a gateway or network timeout during a long thinking phase).
+// It is retryable: the app keeps trying instead of silently ending the turn.
+class StreamIncompleteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StreamIncompleteError";
+  }
+}
 
 // Messages kept raw (never summarized) once compaction fires, per
 // plans/context-compaction.md.
@@ -118,10 +128,19 @@ function truncate(text: string, maxLength: number): string {
 
 function isRetryableStreamError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === "AbortError") return false;
+  if (error instanceof StreamIncompleteError) return true;
+  if (isProxyStreamError(error)) return true;
   if (error instanceof TypeError && error.message.includes("fetch")) return true;
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
-    if (msg.includes("network") || msg.includes("timeout") || msg.includes("econnrefused"))
+    if (
+      msg.includes("network") ||
+      msg.includes("timeout") ||
+      msg.includes("econnrefused") ||
+      msg.includes("no output") ||
+      msg.includes("connection") ||
+      msg.includes("stalled")
+    )
       return true;
   }
   return false;
@@ -271,6 +290,7 @@ export function useChat() {
   const addMessage = useChatStore((state) => state.addMessage);
   const appendMessageContent = useChatStore((state) => state.appendMessageContent);
   const appendMessageReasoning = useChatStore((state) => state.appendMessageReasoning);
+  const resetMessageOutput = useChatStore((state) => state.resetMessageOutput);
   const setMessageStatus = useChatStore((state) => state.setMessageStatus);
   const setMessageError = useChatStore((state) => state.setMessageError);
   const setConversationTitle = useChatStore((state) => state.setConversationTitle);
@@ -619,6 +639,12 @@ export function useChat() {
       for (let attempt = 0; attempt <= MAX_STREAM_RETRIES; attempt++) {
         abortControllerRef.current = new AbortController();
 
+        if (attempt > 0) {
+          // Discard partial output from the interrupted attempt so the retry
+          // does not concatenate duplicate reasoning or text.
+          resetMessageOutput(conversationId, assistantMessage.id);
+        }
+
         try {
           const provider = createOpenAICompatible({
             name: activeProvider.name,
@@ -645,34 +671,54 @@ export function useChat() {
               thinkingLevel !== "off" ? (THINKING_TO_REASONING[thinkingLevel] ?? "medium") : "none",
           });
 
+          let streamedText = "";
+          let receivedFinish = false;
+
           for await (const part of stream) {
             if (part.type === "text-delta") {
+              streamedText += part.text;
               appendMessageContent(conversationId, assistantMessage.id, part.text);
             } else if (part.type === "reasoning-delta") {
               appendMessageReasoning(conversationId, assistantMessage.id, part.text);
             } else if (part.type === "error") {
               throw part.error instanceof Error ? part.error : new Error(String(part.error));
-            } else if (import.meta.env.DEV) {
-              if (part.type === "tool-call") {
-                // eslint-disable-next-line no-console
-                console.log(`[personal-agent] tool call: ${part.toolName}`, part.input);
-              } else if (part.type === "tool-result") {
-                // eslint-disable-next-line no-console
-                console.log(`[personal-agent] tool result: ${part.toolName}`, part.output);
-                if (part.toolName === "recall") {
-                  const recalledTokens = estimateRecallResultTokens(part.output);
-                  if (recalledTokens > 0) {
-                    setLastRecallTokens((previous) => previous + recalledTokens);
+            } else {
+              if (part.type === "finish") {
+                receivedFinish = true;
+              }
+              if (import.meta.env.DEV) {
+                if (part.type === "tool-call") {
+                  // eslint-disable-next-line no-console
+                  console.log(`[personal-agent] tool call: ${part.toolName}`, part.input);
+                } else if (part.type === "tool-result") {
+                  // eslint-disable-next-line no-console
+                  console.log(`[personal-agent] tool result: ${part.toolName}`, part.output);
+                  if (part.toolName === "recall") {
+                    const recalledTokens = estimateRecallResultTokens(part.output);
+                    if (recalledTokens > 0) {
+                      setLastRecallTokens((previous) => previous + recalledTokens);
+                    }
                   }
+                } else if (part.type === "tool-error") {
+                  // eslint-disable-next-line no-console
+                  console.log(`[personal-agent] tool error: ${part.toolName}`, part.error);
+                } else if (part.type === "finish") {
+                  // eslint-disable-next-line no-console
+                  console.log(`[personal-agent] stream finished: ${part.finishReason}`);
                 }
-              } else if (part.type === "tool-error") {
-                // eslint-disable-next-line no-console
-                console.log(`[personal-agent] tool error: ${part.toolName}`, part.error);
-              } else if (part.type === "finish") {
-                // eslint-disable-next-line no-console
-                console.log(`[personal-agent] stream finished: ${part.finishReason}`);
               }
             }
+          }
+
+          // The provider can close the connection mid-response without sending
+          // an error chunk (for example a gateway or network timeout during a
+          // long thinking phase). Treat a finished stream with no text and no
+          // finish signal as an interruption and retry rather than silently
+          // ending the turn with an empty answer.
+          if (!receivedFinish && streamedText.length === 0) {
+            throw new StreamIncompleteError(
+              "The model connection ended before a response was received",
+            );
           }
 
           setMessageStatus(conversationId, assistantMessage.id, "sent");
@@ -774,6 +820,7 @@ export function useChat() {
       addMessage,
       appendMessageContent,
       appendMessageReasoning,
+      resetMessageOutput,
       setMessageStatus,
       setMessageError,
       setConversationTitle,

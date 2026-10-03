@@ -42,6 +42,12 @@ pub enum StreamChunk {
 #[derive(Default)]
 pub struct StreamState(pub Mutex<HashMap<String, oneshot::Sender<()>>>);
 
+// A stream that sends no data for this long is treated as dead and ended so
+// the app can retry. The timer resets on every received chunk, so a slow but
+// active model (long thinking, steady output) is never cut off - only a
+// genuinely stalled connection that has gone silent.
+const STREAM_IDLE_TIMEOUT_SECS: u64 = 120;
+
 fn user_agent() -> String {
     format!("personal-agent/{}", env!("CARGO_PKG_VERSION"))
 }
@@ -182,6 +188,7 @@ pub async fn proxy_stream(
     }
 
     let mut byte_stream = response.bytes_stream();
+    let idle_timeout = std::time::Duration::from_secs(STREAM_IDLE_TIMEOUT_SECS);
 
     loop {
         tokio::select! {
@@ -191,6 +198,18 @@ pub async fn proxy_stream(
                 // Cancellation requested by the webview. Dropping byte_stream
                 // cancels the underlying reqwest response body.
                 let _ = channel.send(StreamChunk::Done { done: true });
+                break;
+            }
+
+            // Idle watchdog: only fires when no chunk has arrived for the whole
+            // window. Every received chunk re-enters this branch with a fresh
+            // timeout, so it acts as an inactivity deadline, not a total limit.
+            _ = tokio::time::sleep(idle_timeout) => {
+                let _ = channel.send(StreamChunk::Error {
+                    error: format!(
+                        "Stream stalled: no data received for {STREAM_IDLE_TIMEOUT_SECS}s"
+                    ),
+                });
                 break;
             }
 

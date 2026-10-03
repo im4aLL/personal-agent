@@ -6,10 +6,13 @@ import {
   CircleAlertIcon,
   Loader2Icon,
   RefreshCwIcon,
+  SearchIcon,
+  XIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "#components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "#components/ui/collapsible";
+import { Input } from "#components/ui/input";
 import { Switch } from "#components/ui/switch";
 import { cn } from "#lib/utils";
 import type { ProviderInfo } from "#store/chat";
@@ -29,6 +32,7 @@ interface ProvidersListProps {
   onToggleModel: (providerId: string, modelId: string, enabled: boolean) => void;
   onSetAllModelsEnabled: (enabled: boolean) => void;
   onSetProviderModelsEnabled: (providerId: string, enabled: boolean) => void;
+  onSetModelsEnabled: (modelKeys: string[], enabled: boolean) => void;
 }
 
 function allModelsState(
@@ -61,6 +65,7 @@ export function ProvidersList({
   onToggleModel,
   onSetAllModelsEnabled,
   onSetProviderModelsEnabled,
+  onSetModelsEnabled,
 }: ProvidersListProps) {
   if (providers.length === 0) {
     return (
@@ -108,6 +113,7 @@ export function ProvidersList({
           onToggleSync={onToggleSync}
           onToggleModel={onToggleModel}
           onSetProviderModelsEnabled={onSetProviderModelsEnabled}
+          onSetModelsEnabled={onSetModelsEnabled}
         />
       ))}
     </div>
@@ -130,6 +136,7 @@ interface ProviderRowProps {
   onToggleSync?: (provider: ProviderInfo, enabled: boolean) => void;
   onToggleModel: (providerId: string, modelId: string, enabled: boolean) => void;
   onSetProviderModelsEnabled: (providerId: string, enabled: boolean) => void;
+  onSetModelsEnabled: (modelKeys: string[], enabled: boolean) => void;
 }
 
 function ProviderRow({
@@ -148,8 +155,10 @@ function ProviderRow({
   onToggleSync,
   onToggleModel,
   onSetProviderModelsEnabled,
+  onSetModelsEnabled,
 }: ProviderRowProps) {
   const [expanded, setExpanded] = useState(false);
+  const [modelSearch, setModelSearch] = useState("");
 
   const enabledCount = provider.models.filter(
     (m) => !disabledModels.has(`${provider.id}:${m.id}`),
@@ -157,8 +166,27 @@ function ProviderRow({
   const hasModels = provider.models.length > 0;
   const zeroEnabled = hasModels && enabledCount === 0 && !provider.isLoadingModels;
 
+  const query = modelSearch.trim().toLowerCase();
+  const visibleModels = query
+    ? provider.models.filter(
+        (m) => m.name.toLowerCase().includes(query) || m.id.toLowerCase().includes(query),
+      )
+    : provider.models;
+  const visibleEnabledCount = visibleModels.filter(
+    (m) => !disabledModels.has(`${provider.id}:${m.id}`),
+  ).length;
+  const allProviderEnabled = enabledCount === provider.models.length;
+  const allVisibleEnabled =
+    visibleModels.length > 0 && visibleEnabledCount === visibleModels.length;
+
   return (
-    <Collapsible open={expanded} onOpenChange={setExpanded}>
+    <Collapsible
+      open={expanded}
+      onOpenChange={(open) => {
+        setExpanded(open);
+        if (!open) setModelSearch("");
+      }}
+    >
       <div className={cn("group", isFirst && "border-t pt-4", !isLast && "border-b pb-4")}>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 space-y-1">
@@ -265,19 +293,57 @@ function ProviderRow({
         <CollapsibleContent>
           <div className="mt-3 ml-8 space-y-1 rounded-md border bg-muted/30 p-3">
             {provider.models.length > 1 && (
-              <div className="flex items-center justify-between pb-2">
-                <span className="text-xs text-muted-foreground">
-                  {enabledCount} of {provider.models.length} enabled
-                </span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">All</span>
-                  <Switch
-                    checked={enabledCount === provider.models.length}
-                    onCheckedChange={(checked) => onSetProviderModelsEnabled(provider.id, checked)}
-                    aria-label={`Toggle all models for ${provider.label}`}
-                  />
+              <>
+                <div className="pb-2">
+                  <div className="relative">
+                    <SearchIcon className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={modelSearch}
+                      onChange={(event) => setModelSearch(event.target.value)}
+                      placeholder="Search models..."
+                      className="h-8 pr-8 pl-8"
+                      aria-label={`Search models for ${provider.label}`}
+                    />
+                    {modelSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setModelSearch("")}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                        aria-label="Clear model search"
+                      >
+                        <XIcon className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-              </div>
+                <div className="flex items-center justify-between pb-2">
+                  <span className="text-xs text-muted-foreground">
+                    {query
+                      ? `${visibleModels.length} of ${provider.models.length} shown`
+                      : `${enabledCount} of ${provider.models.length} enabled`}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">All</span>
+                    <Switch
+                      checked={query ? allVisibleEnabled : allProviderEnabled}
+                      disabled={query.length > 0 && visibleModels.length === 0}
+                      onCheckedChange={(checked) =>
+                        query
+                          ? onSetModelsEnabled(
+                              visibleModels.map((m) => `${provider.id}:${m.id}`),
+                              checked,
+                            )
+                          : onSetProviderModelsEnabled(provider.id, checked)
+                      }
+                      aria-label={
+                        query
+                          ? `Toggle all shown models for ${provider.label}`
+                          : `Toggle all models for ${provider.label}`
+                      }
+                    />
+                  </div>
+                </div>
+              </>
             )}
             {provider.isLoadingModels && provider.models.length === 0 && (
               <div className="flex items-center gap-2 py-2 text-sm text-muted-foreground">
@@ -295,12 +361,15 @@ function ProviderRow({
                 Failed to load models. Check your connection and API key.
               </p>
             )}
-            {provider.models.map((model) => {
+            {visibleModels.map((model) => {
               const modelKey = `${provider.id}:${model.id}`;
               const isEnabled = !disabledModels.has(modelKey);
 
               return (
-                <div key={model.id} className="flex items-center justify-between gap-3 rounded px-2 py-1.5 hover:bg-background transition-colors">
+                <div
+                  key={model.id}
+                  className="flex items-center justify-between gap-3 rounded px-2 py-1.5 hover:bg-background transition-colors"
+                >
                   <button
                     type="button"
                     className="truncate text-sm text-left cursor-pointer"
@@ -316,6 +385,11 @@ function ProviderRow({
                 </div>
               );
             })}
+            {provider.models.length > 0 && visibleModels.length === 0 && (
+              <p className="px-2 py-2 text-sm text-muted-foreground">
+                No models match "{modelSearch.trim()}".
+              </p>
+            )}
           </div>
         </CollapsibleContent>
       </div>
