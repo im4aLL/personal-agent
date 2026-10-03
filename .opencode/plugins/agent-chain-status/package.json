@@ -1,8 +1,0 @@
-{
-  "name": "agent-chain-status",
-  "private": true,
-  "type": "module",
-  "exports": {
-    "./tui": "./index.tsx"
-  }
-}
