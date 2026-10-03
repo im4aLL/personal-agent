@@ -5,9 +5,12 @@ mod pdf_text;
 mod proxy;
 mod search_window;
 
+#[cfg(desktop)]
 use tauri::menu::{AboutMetadata, Menu, MenuItem, PredefinedMenuItem, Submenu};
 
+#[cfg(desktop)]
 const HELP_GITHUB_REPO_ID: &str = "help-github-repo";
+#[cfg(desktop)]
 const HELP_REPORT_ISSUE_ID: &str = "help-report-issue";
 
 #[tauri::command]
@@ -15,6 +18,7 @@ fn write_file(dest: String, contents: Vec<u8>) -> Result<(), String> {
     std::fs::write(&dest, &contents).map_err(|error| error.to_string())
 }
 
+#[cfg(desktop)]
 fn build_menu(app: &tauri::App) -> tauri::Result<Menu<tauri::Wry>> {
     let handle = app.handle();
 
@@ -115,7 +119,8 @@ fn build_menu(app: &tauri::App) -> tauri::Result<Menu<tauri::Wry>> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    #[allow(unused_mut)]
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(proxy::StreamState::default())
@@ -132,24 +137,36 @@ pub fn run() {
             pdf_create::create_pdf,
             write_file
         ])
-        .setup(|app| {
-            let menu = build_menu(app)?;
-            app.set_menu(menu)?;
-            Ok(())
-        })
-        .on_menu_event(|app, event| {
-            use tauri_plugin_opener::OpenerExt;
-
-            let url = match event.id().as_ref() {
-                HELP_GITHUB_REPO_ID => Some("https://github.com/im4aLL/personal-agent"),
-                HELP_REPORT_ISSUE_ID => Some("https://github.com/im4aLL/personal-agent/issues"),
-                _ => None,
-            };
-
-            if let Some(url) = url {
-                let _ = app.opener().open_url(url, None::<&str>);
+        .setup(|_app| {
+            #[cfg(desktop)]
+            {
+                let menu = build_menu(_app)?;
+                _app.set_menu(menu)?;
             }
-        })
+            Ok(())
+        });
+
+    #[cfg(desktop)]
+    {
+        builder = builder.on_menu_event(handle_menu_event);
+    }
+
+    builder
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(desktop)]
+fn handle_menu_event(app: &tauri::AppHandle, event: tauri::menu::MenuEvent) {
+    use tauri_plugin_opener::OpenerExt;
+
+    let url = match event.id().as_ref() {
+        HELP_GITHUB_REPO_ID => Some("https://github.com/im4aLL/personal-agent"),
+        HELP_REPORT_ISSUE_ID => Some("https://github.com/im4aLL/personal-agent/issues"),
+        _ => None,
+    };
+
+    if let Some(url) = url {
+        let _ = app.opener().open_url(url, None::<&str>);
+    }
 }

@@ -37,3 +37,6 @@ dist-ssr
 
 # Local Arch package build
 pkgbuild/
+
+# Shareable Android APKs (built locally, attached to GitHub releases)
+release/
