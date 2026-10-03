@@ -130,6 +130,17 @@
   body {
     @apply overflow-hidden;
   }
+
+  /* Android/iOS draw edge-to-edge (see MainActivity enableEdgeToEdge), so the
+     web layer must reserve space for the system bars. On desktop these env()
+     values resolve to 0px and nothing changes. */
+  #root {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    box-sizing: border-box;
+  }
 }
 
 .prose pre code.hljs {

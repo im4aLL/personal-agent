@@ -23,7 +23,7 @@ export function Layout() {
     <ThemeProvider>
       <ShowMessageIconsProvider>
         <ChatWidthProvider>
-          <div className="flex h-svh overflow-hidden">
+          <div className="flex h-full overflow-hidden">
             <TooltipProvider delayDuration={300}>
               <SidebarProvider>
                 <AppSidebar />

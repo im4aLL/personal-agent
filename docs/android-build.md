@@ -59,9 +59,101 @@ export PATH="/opt/homebrew/opt/rustup/bin:$JAVA_HOME/bin:$ANDROID_HOME/platform-
 npm run tauri android init
 ```
 
-Note: regenerating the project wipes hand-edited files. The release signing
-config in `app/build.gradle.kts` (added in step 1) must be re-applied if you
-regenerate.
+Note: regenerating the project wipes hand-edited files. See step 0.5 for what
+must be re-applied after a regeneration.
+
+### 0.5 If you ever regenerate the Android project
+
+`tauri android init` overwrites the generated project and drops anything edited
+by hand. After regenerating, re-apply all of the following or the build will be
+wrong.
+
+#### 0.5.1 App icon
+
+The generated project ships the Tauri default icon (a colored swirl), not this
+app's logo. Regenerate the Android icons from the app's own artwork:
+
+```sh
+cd /Users/hadi/repos/personal-agent
+npm run tauri icon src-tauri/icons/512x512.png
+```
+
+That writes desktop icons into `src-tauri/icons/` and Android icons into the
+generated `mipmap-*` folders. Then remove the leftover Android Studio template
+drawables, which are unused once the adaptive icon is in place:
+
+```sh
+cd src-tauri/gen/android
+rm -f app/src/main/res/drawable/ic_launcher_background.xml \
+      app/src/main/res/drawable-v24/ic_launcher_foreground.xml
+rmdir app/src/main/res/drawable-v24 app/src/main/res/drawable 2>/dev/null
+```
+
+Confirm the adaptive icon exists:
+
+```sh
+cat app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml
+```
+
+It should reference `@mipmap/ic_launcher_foreground` and
+`@mipmap/ic_launcher_background`.
+
+#### 0.5.2 Release signing config
+
+Re-add the signing config to `app/build.gradle.kts`.
+
+At the top, after the `tauriProperties` block:
+
+```kotlin
+val keystoreProperties = Properties().apply {
+    val propFile = rootProject.file("keystore.properties")
+    if (propFile.exists()) {
+        propFile.inputStream().use { load(it) }
+    }
+}
+```
+
+Inside `android { ... }`, before `buildTypes`:
+
+```kotlin
+    signingConfigs {
+        create("release") {
+            if (keystoreProperties.isNotEmpty()) {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+```
+
+In the `release` build type, add:
+
+```kotlin
+            signingConfig = signingConfigs.getByName("release")
+```
+
+#### 0.5.3 Keystore and secrets
+
+The `.gitignore` files in the generated project already ignore
+`keystore.properties` and `/keystore/`, but a regeneration may reset them.
+Confirm:
+
+```sh
+cd src-tauri/gen/android
+grep -E 'keystore' .gitignore
+```
+
+It must list `keystore.properties` and `/keystore/`. Restore the keystore file
+and `keystore.properties` from your backup if regeneration removed them.
+
+#### 0.5.4 Safe-area layout
+
+The web layer reserves space for the Android system bars (see `src/App.css`,
+`#root { padding-*: env(safe-area-inset-*) }` and the `viewport-fit=cover`
+meta tag in `index.html`). Those live outside `gen/android`, so a regeneration
+does not affect them. No action needed unless the layout is changed.
 
 ## 1. The signing keystore (one-time, keep forever)
 
