@@ -5,13 +5,23 @@ import {
   ChevronDownIcon,
   CircleAlertIcon,
   Loader2Icon,
+  MoreVerticalIcon,
+  PencilIcon,
   RefreshCwIcon,
   SearchIcon,
+  Trash2Icon,
   XIcon,
 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "#components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "#components/ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "#components/ui/dropdown-menu";
 import { Input } from "#components/ui/input";
 import { Switch } from "#components/ui/switch";
 import { cn } from "#lib/utils";
@@ -246,7 +256,44 @@ function ProviderRow({
             )}
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2">
-            <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="sm:hidden"
+                  aria-label="Provider actions"
+                >
+                  <MoreVerticalIcon className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  disabled={provider.isLoadingModels}
+                  onSelect={() => onRefreshModels(provider)}
+                >
+                  <RefreshCwIcon />
+                  Refresh models
+                </DropdownMenuItem>
+                {!provider.isDefault && onSetDefault && (
+                  <DropdownMenuItem onSelect={() => onSetDefault(provider)}>
+                    <CheckCircleIcon />
+                    Set default
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem onSelect={() => onEdit(provider)}>
+                  <PencilIcon />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem variant="destructive" onSelect={() => onDelete(provider)}>
+                  <Trash2Icon />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="hidden items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100 sm:flex">
               <Button
                 variant="ghost"
                 size="sm"

@@ -238,7 +238,7 @@ function ModelSelector() {
             type="button"
             variant="ghost"
             size="sm"
-            className="h-9 w-48 shrink-0 gap-1 px-2 text-xs"
+            className="h-9 min-w-0 flex-1 gap-1 px-2 text-xs sm:w-48 sm:flex-none"
           >
             {isLoading ? <Loader2Icon className="size-3 shrink-0 animate-spin" /> : null}
             <span className="min-w-0 flex-1 truncate text-left">{selectedLabel}</span>
@@ -308,7 +308,7 @@ function ThinkingSelector() {
           type="button"
           variant="ghost"
           size="sm"
-          className="h-9 w-40 shrink-0 gap-1 px-2 text-xs"
+          className="h-9 min-w-0 flex-1 gap-1 px-2 text-xs sm:w-40 sm:flex-none"
         >
           <BrainIcon className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">{selectedLabel}</span>
@@ -1046,7 +1046,7 @@ export function MessageInput() {
             )}
           </div>
         </div>
-        <div className="flex items-center gap-1 px-1 pt-2">
+        <div className="flex flex-wrap items-center gap-1 px-1 pt-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -1067,7 +1067,7 @@ export function MessageInput() {
           <ModelSelector />
           <ThinkingSelector />
           {activeProvider && (
-            <div className="group/context-actions ml-auto flex items-center gap-2">
+            <div className="group/context-actions ml-auto hidden items-center gap-2 sm:flex">
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

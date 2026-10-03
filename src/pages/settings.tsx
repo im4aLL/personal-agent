@@ -211,21 +211,21 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex-1 overflow-auto p-6">
+    <div className="flex-1 overflow-auto p-4 md:p-6">
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold">Settings</h1>
           <p className="text-muted-foreground">Manage providers, appearance, and data.</p>
         </div>
 
-        <div className="flex gap-6">
-          <nav className="flex w-48 shrink-0 flex-col gap-1">
+        <div className="flex flex-col gap-4 md:flex-row md:gap-6">
+          <nav className="flex shrink-0 gap-1 overflow-x-auto pb-1 md:w-48 md:flex-col md:overflow-visible md:pb-0">
             {SECTIONS.map(({ id, label, icon: Icon }) => (
               <Button
                 key={id}
                 variant="ghost"
                 className={cn(
-                  "justify-start gap-2",
+                  "shrink-0 justify-start gap-2 whitespace-nowrap md:w-full",
                   activeSection === id && "bg-accent text-accent-foreground",
                 )}
                 onClick={() => setActiveSection(id)}
@@ -238,76 +238,74 @@ export default function SettingsPage() {
 
           <div className="min-w-0 flex-1 space-y-4">
             {activeSection === "providers" && (
-              <>
-                <Card>
-                  <CardHeader className="flex flex-row items-center justify-between">
-                    <div className="space-y-2">
-                      <CardTitle>Providers</CardTitle>
-                      <CardDescription>AI providers available for chat.</CardDescription>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div className="space-y-2">
+                    <CardTitle>Providers</CardTitle>
+                    <CardDescription>AI providers available for chat.</CardDescription>
+                  </div>
+                  <Button size="sm" onClick={handleAdd}>
+                    <PlusIcon className="size-4" />
+                    Add provider
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <SparklesIcon className="size-4" />
+                      Quick add
                     </div>
-                    <Button size="sm" onClick={handleAdd}>
-                      <PlusIcon className="size-4" />
-                      Add provider
+                    <div className="flex flex-wrap gap-2">
+                      {PROVIDER_PRESETS.map((preset) => (
+                        <Button
+                          key={preset.label}
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleAddPreset(preset)}
+                        >
+                          {preset.label}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <ProvidersList
+                    providers={providers}
+                    providerSyncEnabled={providerSyncEnabled}
+                    providerSyncUnlocked={providerSyncKey !== null}
+                    providerSyncKeyLoaded={providerSyncKeyLoaded}
+                    providerSyncPending={providerSyncPending}
+                    disabledModels={disabledModels}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                    onRefreshModels={handleRefreshModels}
+                    onSetDefault={handleSetDefault}
+                    onToggleSync={handleToggleProviderSync}
+                    onToggleModel={toggleModelEnabled}
+                    onSetAllModelsEnabled={setAllModelsEnabled}
+                    onSetProviderModelsEnabled={setProviderModelsEnabled}
+                    onSetModelsEnabled={setModelsEnabled}
+                  />
+
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-xs text-muted-foreground">
+                      Click the refresh icon next to a provider to fetch available models.
+                      Connection mode is remembered per provider.
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleExportSettings}
+                      disabled={providers.length === 0}
+                      aria-label="Export provider settings"
+                    >
+                      <DownloadIcon className="size-3.5" />
+                      Export
                     </Button>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <SparklesIcon className="size-4" />
-                        Quick add
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {PROVIDER_PRESETS.map((preset) => (
-                          <Button
-                            key={preset.label}
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleAddPreset(preset)}
-                          >
-                            {preset.label}
-                          </Button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <ProvidersList
-                      providers={providers}
-                      providerSyncEnabled={providerSyncEnabled}
-                      providerSyncUnlocked={providerSyncKey !== null}
-                      providerSyncKeyLoaded={providerSyncKeyLoaded}
-                      providerSyncPending={providerSyncPending}
-                      disabledModels={disabledModels}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                      onRefreshModels={handleRefreshModels}
-                      onSetDefault={handleSetDefault}
-                      onToggleSync={handleToggleProviderSync}
-                      onToggleModel={toggleModelEnabled}
-                      onSetAllModelsEnabled={setAllModelsEnabled}
-                      onSetProviderModelsEnabled={setProviderModelsEnabled}
-                      onSetModelsEnabled={setModelsEnabled}
-                    />
-
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="text-xs text-muted-foreground">
-                        Click the refresh icon next to a provider to fetch available models.
-                        Connection mode is remembered per provider.
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleExportSettings}
-                        disabled={providers.length === 0}
-                        aria-label="Export provider settings"
-                      >
-                        <DownloadIcon className="size-3.5" />
-                        Export
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
+                  </div>
+                </CardContent>
+              </Card>
             )}
 
             {activeSection === "instructions" && (

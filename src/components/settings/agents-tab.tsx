@@ -7,13 +7,13 @@ import {
   InstructionDialog,
   ItemDialog,
 } from "#components/settings/agent-dialogs";
+import { Badge } from "#components/ui/badge";
 import { Button } from "#components/ui/button";
 import { ScrollArea } from "#components/ui/scroll-area";
-import { Badge } from "#components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "#components/ui/tabs";
 import { getTursoConfig } from "#lib/turso";
-import { cn } from "#lib/utils";
 import type { CustomAgent, Skill, UserInstruction } from "#lib/types/chat";
+import { cn } from "#lib/utils";
 import { useAgentsStore } from "#store/agents";
 
 type SubTab = "instructions" | "skills" | "agents";
@@ -62,9 +62,9 @@ export function InstructionsTab() {
   }
 
   return (
-    <div className="flex gap-4 min-h-[400px]">
+    <div className="flex flex-col gap-4 min-h-[400px] md:flex-row">
       {/* List */}
-      <div className="w-64 shrink-0 space-y-2 overflow-hidden">
+      <div className="w-full space-y-2 overflow-hidden md:w-64 md:shrink-0">
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">Instructions</h3>
           <Button size="sm" variant="outline" onClick={handleCreate}>
@@ -72,7 +72,7 @@ export function InstructionsTab() {
             New
           </Button>
         </div>
-        <ScrollArea className="h-[340px] w-full rounded-md border">
+        <ScrollArea className="h-48 w-full rounded-md border md:h-[340px]">
           {instructions.length === 0 ? (
             <p className="p-4 text-sm text-muted-foreground">No instructions yet.</p>
           ) : (
@@ -104,7 +104,7 @@ export function InstructionsTab() {
       <div className="flex-1 min-w-0">
         {selected ? (
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <h3 className="font-medium">{selected.name}</h3>
                 {selected.isActive && (
@@ -113,7 +113,7 @@ export function InstructionsTab() {
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   size="sm"
                   variant={selected.isActive ? "secondary" : "outline"}
@@ -124,11 +124,7 @@ export function InstructionsTab() {
                 <Button size="sm" variant="outline" onClick={() => handleEdit(selected)}>
                   Edit
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDeleteTarget(selected)}
-                >
+                <Button size="sm" variant="outline" onClick={() => setDeleteTarget(selected)}>
                   <Trash2Icon className="size-3.5" />
                 </Button>
               </div>
@@ -138,7 +134,7 @@ export function InstructionsTab() {
             </div>
           </div>
         ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+          <div className="flex items-center justify-center py-8 text-sm text-muted-foreground md:h-full md:py-0">
             Select an instruction to view or edit.
           </div>
         )}
@@ -216,10 +212,7 @@ export function SkillsTab() {
       ) : (
         <div className="space-y-2">
           {skills.map((skill) => (
-            <div
-              key={skill.id}
-              className="flex items-start justify-between rounded-lg border p-4"
-            >
+            <div key={skill.id} className="flex items-start justify-between rounded-lg border p-4">
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">/{skill.name}</span>
@@ -235,11 +228,7 @@ export function SkillsTab() {
                 <Button size="sm" variant="outline" onClick={() => handleEdit(skill)}>
                   Edit
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDeleteTarget(skill)}
-                >
+                <Button size="sm" variant="outline" onClick={() => setDeleteTarget(skill)}>
                   <Trash2Icon className="size-3.5" />
                 </Button>
               </div>
@@ -320,10 +309,7 @@ export function CustomAgentsTab() {
       ) : (
         <div className="space-y-2">
           {agents.map((agent) => (
-            <div
-              key={agent.id}
-              className="flex items-start justify-between rounded-lg border p-4"
-            >
+            <div key={agent.id} className="flex items-start justify-between rounded-lg border p-4">
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">/{agent.name}</span>
@@ -339,11 +325,7 @@ export function CustomAgentsTab() {
                 <Button size="sm" variant="outline" onClick={() => handleEdit(agent)}>
                   Edit
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setDeleteTarget(agent)}
-                >
+                <Button size="sm" variant="outline" onClick={() => setDeleteTarget(agent)}>
                   <Trash2Icon className="size-3.5" />
                 </Button>
               </div>
@@ -385,8 +367,8 @@ function TursoNotConfigured() {
       <BotIcon className="mb-4 size-12 text-muted-foreground" />
       <h3 className="text-lg font-medium">Configure Turso to use agents</h3>
       <p className="mt-2 text-sm text-muted-foreground">
-        User instructions, skills, and custom agents require a Turso database connection.
-        Set it up in the Data tab.
+        User instructions, skills, and custom agents require a Turso database connection. Set it up
+        in the Data tab.
       </p>
     </div>
   );
