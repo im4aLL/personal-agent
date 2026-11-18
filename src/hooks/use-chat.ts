@@ -56,6 +56,16 @@ class StreamIncompleteError extends Error {
   }
 }
 
+// Raised when the model stops at its output token limit before the answer is
+// complete. Retrying the same request cannot help, so the turn ends with a
+// visible error instead of a silently truncated answer.
+class StreamOutputLimitError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "StreamOutputLimitError";
+  }
+}
+
 // Messages kept raw (never summarized) once compaction fires, per
 // plans/context-compaction.md.
 const COMPACTION_TAIL_SIZE = 18;
@@ -128,6 +138,7 @@ function truncate(text: string, maxLength: number): string {
 
 function isRetryableStreamError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === "AbortError") return false;
+  if (error instanceof StreamOutputLimitError) return false;
   if (error instanceof StreamIncompleteError) return true;
   if (isProxyStreamError(error)) return true;
   if (error instanceof TypeError && error.message.includes("fetch")) return true;
@@ -290,7 +301,7 @@ export function useChat() {
   const addMessage = useChatStore((state) => state.addMessage);
   const appendMessageContent = useChatStore((state) => state.appendMessageContent);
   const appendMessageReasoning = useChatStore((state) => state.appendMessageReasoning);
-  const resetMessageOutput = useChatStore((state) => state.resetMessageOutput);
+  const setMessageOutput = useChatStore((state) => state.setMessageOutput);
   const setMessageStatus = useChatStore((state) => state.setMessageStatus);
   const setMessageError = useChatStore((state) => state.setMessageError);
   const setConversationTitle = useChatStore((state) => state.setConversationTitle);
@@ -636,13 +647,38 @@ export function useChat() {
       const useProxy = shouldUseProxy(activeProvider);
       const fetchImpl = useProxy ? proxyFetch : undefined;
 
+      // Reads what the interrupted attempt streamed so it can be restored if
+      // every retry also fails, instead of leaving an empty bubble.
+      const readPartialOutput = (): Pick<Message, "content" | "reasoning"> | null => {
+        const stored = useChatStore
+          .getState()
+          .conversations.find((item) => item.id === conversationId);
+        const message = stored?.messages.find((item) => item.id === assistantMessage.id);
+
+        if (!message || (!message.content && !message.reasoning?.content)) {
+          return null;
+        }
+
+        return { content: message.content, reasoning: message.reasoning };
+      };
+
+      // Total visible output length, used to keep the longest partial answer.
+      const outputLength = (output: Pick<Message, "content" | "reasoning"> | null): number =>
+        (output?.content.length ?? 0) + (output?.reasoning?.content.length ?? 0);
+
+      let longestPartial: Pick<Message, "content" | "reasoning"> | null = null;
+
       for (let attempt = 0; attempt <= MAX_STREAM_RETRIES; attempt++) {
-        abortControllerRef.current = new AbortController();
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
 
         if (attempt > 0) {
           // Discard partial output from the interrupted attempt so the retry
           // does not concatenate duplicate reasoning or text.
-          resetMessageOutput(conversationId, assistantMessage.id);
+          setMessageOutput(conversationId, assistantMessage.id, {
+            content: "",
+            reasoning: undefined,
+          });
         }
 
         try {
@@ -666,25 +702,28 @@ export function useChat() {
             messages,
             ...(combinedSystemPrompt ? { system: combinedSystemPrompt } : {}),
             ...(hasTools ? { tools, stopWhen: stepCountIs(8) } : {}),
-            abortSignal: abortControllerRef.current.signal,
+            abortSignal: abortController.signal,
             reasoning:
               thinkingLevel !== "off" ? (THINKING_TO_REASONING[thinkingLevel] ?? "medium") : "none",
           });
 
-          let streamedText = "";
-          let receivedFinish = false;
+          let receivedAbort = false;
+          let finishReason: string | null = null;
+          let rawFinishReason: string | undefined;
 
           for await (const part of stream) {
             if (part.type === "text-delta") {
-              streamedText += part.text;
               appendMessageContent(conversationId, assistantMessage.id, part.text);
             } else if (part.type === "reasoning-delta") {
               appendMessageReasoning(conversationId, assistantMessage.id, part.text);
             } else if (part.type === "error") {
               throw part.error instanceof Error ? part.error : new Error(String(part.error));
             } else {
-              if (part.type === "finish") {
-                receivedFinish = true;
+              if (part.type === "abort") {
+                receivedAbort = true;
+              } else if (part.type === "finish") {
+                finishReason = part.finishReason;
+                rawFinishReason = part.rawFinishReason;
               }
               if (import.meta.env.DEV) {
                 if (part.type === "tool-call") {
@@ -704,20 +743,38 @@ export function useChat() {
                   console.log(`[personal-agent] tool error: ${part.toolName}`, part.error);
                 } else if (part.type === "finish") {
                   // eslint-disable-next-line no-console
-                  console.log(`[personal-agent] stream finished: ${part.finishReason}`);
+                  console.log(
+                    `[personal-agent] stream finished: ${part.finishReason} (raw: ${part.rawFinishReason ?? "none"})`,
+                  );
                 }
               }
             }
           }
 
+          if (receivedAbort || abortController.signal.aborted) {
+            // The user stopped the turn: keep whatever arrived so far.
+            setMessageStatus(conversationId, assistantMessage.id, "sent");
+            persistConversation(conversationId);
+            lastError = null;
+            break;
+          }
+
           // The provider can close the connection mid-response without sending
-          // an error chunk (for example a gateway or network timeout during a
-          // long thinking phase). Treat a finished stream with no text and no
-          // finish signal as an interruption and retry rather than silently
-          // ending the turn with an empty answer.
-          if (!receivedFinish && streamedText.length === 0) {
+          // an error chunk: an upstream gateway or network timeout during a
+          // long thinking phase ends the SSE body cleanly. The SDK still emits
+          // a finish part, so its presence only proves the stream ended. The
+          // provider's raw finish reason is the real completion signal; when
+          // it is missing, the response was cut off and is retried instead of
+          // being marked complete with a truncated answer.
+          if (rawFinishReason == null) {
             throw new StreamIncompleteError(
-              "The model connection ended before a response was received",
+              "The model connection ended before the response was complete",
+            );
+          }
+
+          if (finishReason === "length") {
+            throw new StreamOutputLimitError(
+              "The model reached its output limit before the answer was complete",
             );
           }
 
@@ -770,6 +827,11 @@ export function useChat() {
             break;
           }
 
+          const partial = readPartialOutput();
+          if (outputLength(partial) > outputLength(longestPartial)) {
+            longestPartial = partial;
+          }
+
           const delay = STREAM_RETRY_BASE_DELAY_MS * 2 ** attempt;
           if (import.meta.env.DEV) {
             // eslint-disable-next-line no-console
@@ -782,6 +844,11 @@ export function useChat() {
       }
 
       if (lastError) {
+        const currentOutput = readPartialOutput();
+        if (!currentOutput && longestPartial) {
+          setMessageOutput(conversationId, assistantMessage.id, longestPartial);
+        }
+
         let message =
           lastError instanceof Error ? lastError.message : "Failed to generate response";
         const isNetworkError =
@@ -820,7 +887,7 @@ export function useChat() {
       addMessage,
       appendMessageContent,
       appendMessageReasoning,
-      resetMessageOutput,
+      setMessageOutput,
       setMessageStatus,
       setMessageError,
       setConversationTitle,

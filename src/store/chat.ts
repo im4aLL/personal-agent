@@ -97,7 +97,11 @@ export type ChatState = {
   addMessage: (conversationId: string, message: Message) => void;
   appendMessageContent: (conversationId: string, messageId: string, delta: string) => void;
   appendMessageReasoning: (conversationId: string, messageId: string, delta: string) => void;
-  resetMessageOutput: (conversationId: string, messageId: string) => void;
+  setMessageOutput: (
+    conversationId: string,
+    messageId: string,
+    output: Pick<Message, "content" | "reasoning">,
+  ) => void;
   setMessageStatus: (conversationId: string, messageId: string, status: Message["status"]) => void;
   setMessageError: (conversationId: string, messageId: string, error: string) => void;
   deleteMessage: (conversationId: string, messageId: string) => void;
@@ -604,15 +608,17 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }));
   },
 
-  // Clears streamed output before a retry attempt so partial text and
-  // reasoning from the interrupted attempt are not concatenated with the
-  // retried attempt's output.
-  resetMessageOutput: (conversationId, messageId) => {
+  // Replaces streamed output for a message. Used to clear partial text and
+  // reasoning before a retry attempt, and to put back the longest partial when
+  // every attempt was interrupted.
+  setMessageOutput: (conversationId, messageId, output) => {
     set((state) => ({
       conversations: updateConversation(state, conversationId, (conversation) => ({
         ...conversation,
         messages: conversation.messages.map((message) =>
-          message.id === messageId ? { ...message, content: "", reasoning: undefined } : message,
+          message.id === messageId
+            ? { ...message, content: output.content, reasoning: output.reasoning }
+            : message,
         ),
       })),
     }));

@@ -174,7 +174,8 @@ sequenceDiagram
 
 Details:
 
-- When `connectionMode` is `proxy`, the AI SDK gets `fetch: proxyFetch`; otherwise the webview fetches directly (use-chat.ts:253).
+- When `connectionMode` is `proxy`, the AI SDK gets `fetch: proxyFetch`; otherwise the webview fetches directly (use-chat.ts:648).
+- A stream counts as complete only when the provider sent a finish reason. A clean close without one (an upstream gateway or network layer cutting the SSE body during a long thinking phase) is retried up to 2 times; if every attempt is interrupted, the longest partial output is restored so the turn ends with a visible error instead of a silently truncated answer. A finish reason of `length` reports an output-limit error rather than a complete answer.
 - `proxyFetch` (lib/ai.ts) converts a standard `fetch` signature into a Tauri channel stream, and maps `AbortSignal` to `invoke("abort_stream")`.
 - Streaming chunks are appended to the message in the store, so the UI updates per token.
 - Before the request is sent, `buildOutgoingContext` (lib/context.ts) collapses history into `[persisted summary] + [raw tail]` when a summary exists and its cutoff message is still present; otherwise it sends full history. If estimated tokens exceed 70% of the resolved context window and no valid summary covers the history, auto-compaction runs first (see section 9) before the real request goes out.
